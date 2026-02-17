@@ -32,3 +32,27 @@ Python 3.11+. Solo hackathon, ~10h budget.
 Step1 -> Step2 -> Step3 -> Step4 -> Step5 -> Step6
 
 Never skip. Each checkpoint is independently demonstrable.
+
+## Execution Phases (Parallel Opportunities)
+
+Build order allows parallelism; checkpoint order stays sequential.
+
+```
+Phase A: Step 1 (foundation)          — mesi-domain-engineer
+Phase B: Step 2 ‖ Step 3              — authority-runtime-engineer ‖ mesi-domain-engineer
+Phase C: Step 4 (wires strategies+runtime) — simulation-scenario-engineer
+Phase D: Step 5 ‖ Step 6              — simulation-scenario-engineer (split)
+```
+
+| Phase | Parallel? | Why |
+|-------|-----------|-----|
+| A→B | Step 2 ‖ Step 3 | Both depend only on Step 1 types. Different files, no shared state. |
+| C | Sequential | Needs both strategies (Step 3) and runtime (Step 2). |
+| C→D | Step 5 ‖ Step 6 | Both consume simulation output. Independent renderers (`terminal.py` vs `report.py`). |
+
+Launch parallel steps in a **single message** with multiple Task tool calls.
+
+
+<claude-mem-context>
+
+</claude-mem-context>
