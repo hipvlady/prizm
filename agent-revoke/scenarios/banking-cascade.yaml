@@ -1,0 +1,14 @@
+scenario: banking-cascade
+description: "Financial cascade revocation — zero tolerance for stale permissions"
+strategy: eager
+agents: 10
+delegation_depth: 3
+operations_per_second: 5
+simulation_ticks: 200
+revocation:
+  reason: COMPROMISED
+  cascade: true
+  trigger_at_tick: 100
+expected_outcome:
+  unauthorized_ops: 0
+  convergence_max_ticks: 50

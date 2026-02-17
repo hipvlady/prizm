@@ -1,0 +1,17 @@
+scenario: crm-bulk-ops
+description: "High-velocity CRM agent — exec-count vs TTL comparison"
+strategies: [exec_count, lease]
+agents: 3
+delegation_depth: 1
+operations_per_second: 100
+simulation_ticks: 700
+credentials:
+  exec_count_max_operations: 50
+  lease_ttl_ticks: 600
+revocation:
+  trigger_at_tick: 50
+  reason: EXPLICIT
+  cascade: true
+expected_outcome:
+  exec_count_unauthorized_ops: 50
+  lease_unauthorized_ops: 6000
