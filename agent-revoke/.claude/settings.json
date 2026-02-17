@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "(ruff format \"$CLAUDE_FILE_PATH\" 2>/dev/null || black -q \"$CLAUDE_FILE_PATH\" 2>/dev/null) || true"
+          }
+        ]
+      }
+    ]
+  }
+}
