@@ -1,3 +1,6 @@
+# Hookify local rules (personal, not shared)
+.claude/hookify.*.local.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
