@@ -1,7 +1,7 @@
 # src/agent — Agent Runtime
 
 AgentRuntime (PEP) + local capability cache with MESI states.
-Imports from `src/core` (types + MESI). Receives invalidations from authority.
+Imports from `src/core` (types + MESI). Receives invalidations from src.authority.
 
 Owner: **authority-runtime-engineer** | Task: #5
 
