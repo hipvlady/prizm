@@ -54,8 +54,3 @@ A: #1 → B: #2 ‖ #3 ‖ #6 → C: #4 ‖ #5 ‖ #7 → D: #8 → E: #9 ‖ #1
 Critical path: #1 → #2 → #7 → #8 → #10. Launch parallel tasks in a single message.
 
 See `.claude/rules/` for full execution framework, parallel checklist, and orchestration guide.
-
-
-<claude-mem-context>
-
-</claude-mem-context>
