@@ -1,17 +1,30 @@
-scenario: banking-cascade
-description: "Financial cascade revocation — zero tolerance for stale permissions"
-strategy: eager
-agents: 10
-delegation_depth: 3
-operations_per_second: 5
+# Scenario 1: Banking Cascade Revocation
+# Business Context: A payment processing agent in a deep delegation chain is compromised.
+# Shows: The effectiveness of the 'eager' strategy in quickly propagating a root revocation down the chain.
+# Key Metric: unauthorized_actions_by_depth
+
 simulation:
   duration_ticks: 200
-  action_probability: 0.1
-simulation_ticks: 200
-revocation:
-  reason: COMPROMISED
-  cascade: true
-  trigger_at_tick: 100
-expected_outcome:
-  unauthorized_ops: 0
-  convergence_max_ticks: 50
+  agents: 10
+  action_probability: 0.5
+  latency_ticks: 10
+  transient_timeout_ticks: 100
+
+scenario:
+  name: "Banking Cascade Revocation"
+  delegation_depth: 3
+  cascade_revocation: true
+  revocation_trigger_tick: 100 # Revocation is triggered halfway through the simulation
+
+strategies:
+  lazy:
+    check_interval_ticks: 10
+  lease:
+    default_ttl_ticks: 3000
+  exec_count:
+    max_operations: 100
+
+trust:
+  initial_score: 0.8
+  anomaly_threshold: 0.4
+  score_decay_on_anomaly: 0.3

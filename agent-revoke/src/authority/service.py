@@ -102,3 +102,15 @@ class AuthorityService:
             parent_cap_id=parent_cap_id,
         )
 
+    def check_capability(
+        self, agent_id: UUID, resource: str
+    ) -> Dict:
+        """Checks if an agent has a valid capability for a resource."""
+        # TODO: Implement validation logic
+        pass
+
+    def get_revocation_status(self, event_id: UUID) -> Dict:
+        """Gets the propagation status of a revocation event."""
+        # TODO: Implement status tracking
+        pass
+
