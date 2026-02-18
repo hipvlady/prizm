@@ -1,50 +1,50 @@
-from typing import Dict
-from uuid import UUID
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from .base import RevocationStrategy
+from src.core.mesi import MESIState
+from src.core.types import RevocationReason
+
+if TYPE_CHECKING:
+    from agent.runtime import AgentRuntime
+    from core.types import Capability, RevocationEvent
 
 
 class LeaseBasedStrategy(RevocationStrategy):
     """
-    Consistency-directed. Temporal Coherence (Primer Ch.10 §10.1.3).
-    Agent SELF-INVALIDATES on TTL expiry — writer does NOT push invalidation.
-    Staleness bound: ttl_seconds.
+    Temporal Coherence. Agent self-invalidates when its time-based lease expires.
+    Each capability is granted with a TTL (`expires_tick`). The agent is responsible
+    for honoring this limit and self-invalidating its cache.
     """
-
-    name = "lease"
-    coherence_class = "consistency-directed"
-    
-    def __init__(self, default_ttl_ticks: int = 600):
+    def __init__(self, default_ttl_ticks: int = 500):
         self.default_ttl_ticks = default_ttl_ticks
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        # In lease-based strategy, revocation is handled by TTL expiry on the agent side.
-        # The authority still marks the capability as invalid.
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=False,
-            agents_notified=0,
-            agents_acked=0,
-            ticks_elapsed=0,
-            unauthorized_ops_during_propagation=0,
-        )
+    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        return capability
 
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        # The agent's attempt_action logic already handles TTL expiry.
-        return agent.attempt_action(resource)
+    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
+        new_parent_data = parent_cap.to_dict()
+        new_parent_data["state"] = MESIState.MODIFIED
+        new_parent_cap = Capability(**new_parent_data)
+        return new_parent_cap, child_cap
 
-    def get_staleness_bound(self) -> str:
-        return f"{self.default_ttl_ticks} ticks TTL"
+    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Capability:
+        """Authority can still send an out-of-band revocation to cut a lease short."""
+        cap = agent.state.capabilities[event.capability_id]
+        new_cap_data = cap.to_dict()
+        new_cap_data["state"] = MESIState.INVALID
+        return Capability(**new_cap_data)
+
+    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        """Check for expiration before use."""
+        if capability.expires_tick is not None and agent.clock.now() >= capability.expires_tick:
+            new_cap_data = capability.to_dict()
+            new_cap_data["state"] = MESIState.INVALID
+            return Capability(**new_cap_data)
+        return capability
+
+    def on_tick(self, agent: AgentRuntime, tick: int):
+        """Proactively check for and invalidate expired leases."""
+        for cap_id, cap in list(agent.state.capabilities.items()):
+            if cap.state != MESIState.INVALID and cap.expires_tick is not None and tick >= cap.expires_tick:
+                agent.invalidate_capability(cap_id, RevocationReason.EXPIRED, tick)

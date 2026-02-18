@@ -1,118 +1,87 @@
-from typing import Optional, List
+from __future__ import annotations
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from core.clock import LogicalClock
-from core.types import (
-    RevocationEvent,
-    ActionResult,
-    ActionRecord,
-    Capability,
-    MESIState,
-)
-from agent.cache import CapabilityCache
-from authority.service import AuthorityService
+from src.core.types import Capability, RevocationEvent, ActionRecord, ActionResult
+from src.core.mesi import MESIState
+from .cache import AgentCache
 
+if TYPE_CHECKING:
+    from src.authority.service import AuthorityService
+    from src.strategies.base import RevocationStrategy
+    from src.core.clock import LogicalClock
 
 class AgentRuntime:
+    """
+    The PEP (Policy Enforcement Point). It manages the agent's local state and
+    delegates all authorization decisions to its configured RevocationStrategy.
+    """
     def __init__(
         self,
         agent_id: UUID,
         authority: AuthorityService,
-        cache: CapabilityCache,
+        strategy: RevocationStrategy,
         clock: LogicalClock,
+        transient_timeout_ticks: int,
     ):
         self.agent_id = agent_id
         self.authority = authority
-        self.cache = cache
+        self.strategy = strategy
         self.clock = clock
-        self.action_history: List[ActionRecord] = []
+        self.cache = AgentCache(agent_id, transient_timeout_ticks)
 
-    def on_revocation(self, event: RevocationEvent) -> bool:
-        self.cache.invalidate(event.capability_id)
-        # Record the revocation event in the action history
-        self.report_action(
-            ActionRecord(
-                agent_id=self.agent_id,
-                resource=f"revocation:{event.reason.value}",
-                result=ActionResult.ALLOWED,
-                tick=self.clock.now(),
-                capability_id=event.capability_id,
-            )
-        )
-        return True
+    @property
+    def state(self):
+        return self.cache.state
 
-    def request_capability(self, resource: str) -> Optional[Capability]:
-        return self.authority.grant_capability(self.agent_id, resource)
-
-    def attempt_action(self, resource: str) -> ActionResult:
-        cap = self.cache.get_by_resource(resource)
+    def on_revocation_received(self, event: RevocationEvent):
+        """Hook for when the authority pushes a revocation event to this agent."""
+        cap = self.cache.get(event.capability_id)
         if not cap:
-            return ActionResult.DENIED
+            return
 
-        if self.cache.expire_ttl(cap.id, self.clock.now()):
-            return ActionResult.DENIED
+        updated_cap = self.strategy.on_revoke(self, event)
+        if updated_cap:
+            self.cache.update(updated_cap)
 
-        if cap.state == MESIState.INVALID:
-            return ActionResult.DENIED
-
-        exec_count_result = self.cache.check_exec_count(cap.id)
-        if exec_count_result == ActionResult.EXHAUSTED:
-            return ActionResult.EXHAUSTED
-
-        self.cache.increment_ops(cap.id)
-        
-        action_record = ActionRecord(
-            agent_id=self.agent_id,
-            resource=resource,
-            result=ActionResult.ALLOWED,
-            tick=self.clock.now(),
-            capability_id=cap.id,
-        )
-        self.report_action(action_record)
-
-        return ActionResult.ALLOWED
-
-    def attempt_write_action(self, resource: str) -> ActionResult:
-        cap = self.cache.get_by_resource(resource)
+    def attempt_action(self, resource: str, tick: int) -> ActionRecord:
+        """
+        Attempts to perform an action, delegating all logic to the strategy.
+        """
+        cap = self.cache.find_by_resource(resource)
         if not cap:
-            return ActionResult.DENIED
+            return self._record_action(None, resource, tick, False, ActionResult.DENIED_INVALID)
 
-        if self.cache.expire_ttl(cap.id, self.clock.now()):
-            return ActionResult.DENIED
+        # Delegate to strategy
+        updated_cap = self.strategy.on_action(self, cap)
+        self.cache.update(updated_cap)
 
-        if cap.state == MESIState.INVALID:
-            return ActionResult.DENIED
-
-        exec_count_result = self.cache.check_exec_count(cap.id)
-        if exec_count_result == ActionResult.EXHAUSTED:
-            return ActionResult.EXHAUSTED
-
-        self.cache.increment_ops(cap.id)
+        is_authorized = updated_cap.state not in [MESIState.INVALID] and updated_cap.transient_state is None
         
-        # Transition to Modified state on write
-        self.cache.update_state(cap.id, MESIState.MODIFIED)
+        result = ActionResult.ALLOWED if is_authorized else ActionResult.DENIED_INVALID
+        if updated_cap.transient_state is not None:
+            result = ActionResult.DENIED_TRANSIENT
 
-        action_record = ActionRecord(
+        record = self._record_action(updated_cap, resource, tick, is_authorized, result)
+
+        if is_authorized:
+            self.cache.increment_ops(updated_cap.id)
+
+        return record
+
+    def check_transient_timeouts(self, tick: int):
+        """Delegates transient state timeout checks to the cache."""
+        self.cache.check_transient_timeouts(tick)
+
+    def _record_action(self, cap: Optional[Capability], resource: str, tick: int, authorized: bool, result: ActionResult) -> ActionRecord:
+        record = ActionRecord(
             agent_id=self.agent_id,
+            capability_id=cap.id if cap else None,
             resource=resource,
-            result=ActionResult.ALLOWED,
-            tick=self.clock.now(),
-            capability_id=cap.id,
+            tick=tick,
+            authorized=authorized,
+            result=result,
+            delegation_depth=cap.delegation_depth if cap else -1,
         )
-        self.report_action(action_record)
-
-        return ActionResult.ALLOWED
-
-    def report_action(self, action: ActionRecord) -> None:
-        self.action_history.append(action)
-        self.from authority.trust_scorer.check_anomaly(self.agent_id, self.action_history)
-
-    def sync_capabilities(self) -> None:
-        caps = self.from authority.registry.get_for_agent(self.agent_id)
-        for cap in caps:
-            cached_cap = self.cache.get(cap.id)
-            if cached_cap:
-                new_cap = Capability(**{**cap.__dict__, "operations_used": cached_cap.operations_used})
-                self.cache.store(new_cap)
-            else:
-                self.cache.store(cap)
+        self.state.action_history.append(record)
+        return record

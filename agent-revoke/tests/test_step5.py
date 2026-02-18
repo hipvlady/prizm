@@ -3,7 +3,7 @@ import os
 from src.simulation.engine import SimulationEngine
 from src.simulation.scenarios import load_scenario
 from src.strategies.eager import EagerInvalidationStrategy
-from src.strategies.exec_count import ExecCountBoundedStrategy
+from src.strategies.exec_count import ExecCountStrategy
 from src.strategies.lease import LeaseBasedStrategy
 
 @pytest.fixture(scope="module")
@@ -18,7 +18,7 @@ def test_engine_runs_banking_cascade(scenarios_path):
 
 def test_engine_crm_exec_count_exactly_50(scenarios_path):
     config = load_scenario(os.path.join(scenarios_path, "crm-bulk-ops.yaml"))
-    strategy = ExecCountBoundedStrategy(max_operations=config['credentials']['exec_count_max_operations'])
+    strategy = ExecCountStrategy(max_operations=config['credentials']['exec_count_max_operations'])
     engine = SimulationEngine(config, strategy)
     
     # This is a simplification. The actual number of unauthorized actions
@@ -60,7 +60,7 @@ def test_html_report_generated(tmp_path):
     from src.simulation.metrics import SimulationMetrics
     from src.output.report import generate_html_report, save_report
     
-    metrics = SimulationMetrics("test", "test", 100, 1.0, 2.0, 10, 20, 30, 5)
+    metrics = SimulationMetrics("test", "test", 100, 50, 10, {1: 5, 2: 5})
     html = generate_html_report(metrics, template_dir="agent-revoke/src/output/templates")
     
     report_path = tmp_path / "report.html"

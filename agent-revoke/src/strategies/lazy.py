@@ -1,57 +1,56 @@
-from typing import Dict
-from uuid import UUID
+from __future__ import annotations
+from typing import TYPE_CHECKING, Optional
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from .base import RevocationStrategy
+from src.core.mesi import MESIState, TransientState
+
+if TYPE_CHECKING:
+    from agent.runtime import AgentRuntime
+    from core.types import Capability, RevocationEvent
 
 
 class LazyInvalidationStrategy(RevocationStrategy):
     """
-    Consistency-directed.
-    Revocation recorded at authority. Agent checks on NEXT action attempt.
-    Staleness bound: network_latency + check_interval.
+    Consistency-Directed. Agent checks with authority on a defined interval ("check-on-use").
+    The authority does not push revocations; the agent pulls validity information.
     """
-
-    name = "lazy"
-    coherence_class = "consistency-directed"
-
-    def __init__(self, check_interval_ticks: int = 10):
+    def __init__(self, check_interval_ticks: int = 100):
         self.check_interval_ticks = check_interval_ticks
-        self.last_check: Dict[UUID, int] = {}
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        # In lazy strategy, we just record the revocation at the authority.
-        # The agents will find out on their next action attempt.
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=False,
-            agents_notified=0,
-            agents_acked=0,
-            ticks_elapsed=0,
-            unauthorized_ops_during_propagation=0,
-        )
+    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        return capability
 
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        now = agent.clock.now()
-        last_check_tick = self.last_check.get(agent.agent_id, 0)
+    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
+        new_parent_data = parent_cap.to_dict()
+        new_parent_data["state"] = MESIState.MODIFIED
+        new_parent_cap = Capability(**new_parent_data)
+        return new_parent_cap, child_cap
 
-        if now - last_check_tick >= self.check_interval_ticks:
-            agent.sync_capabilities()
-            self.last_check[agent.agent_id] = now
+    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Optional[Capability]:
+        # In Lazy mode, the agent doesn't process unsolicited revocations from the bus.
+        # It will discover the invalidation during its next on_action or on_tick check.
+        return None
 
-        return agent.attempt_action(resource)
+    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        """On action, check if the revalidation interval has passed."""
+        if agent.clock.now() - agent.state.last_sync_tick > self.check_interval_ticks:
+            # Time to revalidate. Enter a transient state.
+            # The agent runtime will see this and issue a revalidation request.
+            new_cap_data = capability.to_dict()
+            new_cap_data["transient_state"] = TransientState.ISG # Invalid-to-Shared-waiting-Grant
+            new_cap_data["transient_entered_tick"] = agent.clock.now()
+            return Capability(**new_cap_data)
+        return capability
 
-    def get_staleness_bound(self) -> str:
-        return f"check_interval ({self.check_interval_ticks} ticks)"
+    def on_tick(self, agent: AgentRuntime, tick: int):
+        """Periodically re-validate capabilities based on the interval."""
+        if tick - agent.state.last_sync_tick > self.check_interval_ticks:
+            for cap in agent.state.capabilities.values():
+                if cap.state == MESIState.INVALID:
+                    continue
+                # This is a simplified model. A real implementation would batch these.
+                new_cap_data = cap.to_dict()
+                new_cap_data["transient_state"] = TransientState.ISG
+                new_cap_data["transient_entered_tick"] = agent.clock.now()
+                agent.state.capabilities[cap.id] = Capability(**new_cap_data)
+            agent.state.last_sync_tick = tick

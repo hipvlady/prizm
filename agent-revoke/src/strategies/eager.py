@@ -1,58 +1,39 @@
-from typing import Dict
-from uuid import UUID
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from .base import RevocationStrategy
+from src.core.mesi import MESIState
 
+if TYPE_CHECKING:
+    from agent.runtime import AgentRuntime
+    from core.types import Capability, RevocationEvent
 
 class EagerInvalidationStrategy(RevocationStrategy):
     """
-    Consistency-agnostic (SWMR-enforcing).
-    Blocks until ALL agents ACK before returning.
-    Highest security, highest operational cost.
-    Primer: synchronous broadcast, illusion of atomic state.
+    Consistency-Agnostic (SWMR-enforcing). Revocation blocks until all agents ACK.
+    This is the simplest, most consistent strategy. When a revocation event is received,
+    the capability is immediately marked as INVALID.
     """
 
-    name = "eager"
-    coherence_class = "consistency-agnostic"
+    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        return capability
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        start_tick = authority.clock.now()
-        
-        pending_agents = list(from authority.broadcaster.get_pending_agents(event.id))
-        
-        for agent_id in pending_agents:
-            agents[agent_id].on_revocation(event)
-            from authority.broadcaster.record_ack(event.id, agent_id, authority.clock.now())
+    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
+        """On delegation, the parent moves to MODIFIED state."""
+        new_parent_data = parent_cap.to_dict()
+        new_parent_data["state"] = MESIState.MODIFIED
+        new_parent_cap = Capability(**new_parent_data)
+        return new_parent_cap, child_cap
 
-        while not from authority.broadcaster.is_fully_propagated(event.id):
-            authority.clock.advance()
+    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Capability:
+        """On revocation, the capability becomes INVALID immediately."""
+        cap = agent.state.capabilities[event.capability_id]
+        new_cap_data = cap.to_dict()
+        new_cap_data["state"] = MESIState.INVALID
+        return Capability(**new_cap_data)
 
-        end_tick = authority.clock.now()
+    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        return capability
 
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=True,
-            agents_notified=len(pending_agents),
-            agents_acked=len(pending_agents),
-            ticks_elapsed=end_tick - start_tick,
-            unauthorized_ops_during_propagation=0,
-        )
-
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        return agent.attempt_action(resource)
-
-    def get_staleness_bound(self) -> str:
-        return "network_latency"
+    def on_tick(self, agent: AgentRuntime, tick: int):
+        pass  # Eager strategy is not time-dependent

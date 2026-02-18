@@ -1,54 +1,56 @@
-from typing import Dict
-from uuid import UUID
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from .base import RevocationStrategy
+from src.core.mesi import MESIState, TransientState
+
+if TYPE_CHECKING:
+    from agent.runtime import AgentRuntime
+    from core.types import Capability, RevocationEvent
 
 
-class ExecCountBoundedStrategy(RevocationStrategy):
+class ExecCountStrategy(RevocationStrategy):
     """
-    Consistency-directed. RCC acquire pattern (Primer Ch.10 §10.1.4).
-    Agent gets N operations max. Re-validates at Exhausted boundary.
-    Staleness bound: max_operations - operations_at_revocation (in OPS, not time).
-    
-    KILLER DEMO: N=50 → exactly 50 unauthorized ops.
-    Compare: TTL(60s) @ 100ops/sec → up to 6000 unauthorized ops.
+    Release Consistency-directed Coherence (RCC). Agent self-invalidates after a
+    maximum number of operations. It is clock-independent.
     """
-
-    name = "exec_count"
-    coherence_class = "consistency-directed"
-
     def __init__(self, max_operations: int = 50):
         self.max_operations = max_operations
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        # Similar to lazy, the agent finds out upon exhaustion.
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=False,
-            agents_notified=0,
-            agents_acked=0,
-            ticks_elapsed=0,
-            unauthorized_ops_during_propagation=0,
-        )
+    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        return capability
 
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        result = agent.attempt_action(resource)
-        if result == ActionResult.EXHAUSTED:
-            agent.sync_capabilities()
-        return result
+    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
+        new_parent_data = parent_cap.to_dict()
+        new_parent_data["state"] = MESIState.MODIFIED
+        new_parent_cap = Capability(**new_parent_data)
+        return new_parent_cap, child_cap
 
-    def get_staleness_bound(self) -> str:
-        return f"N={self.max_operations} ops (vs TTL bound in time)"
+    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Capability:
+        """Authority can still send an out-of-band revocation."""
+        cap = agent.state.capabilities[event.capability_id]
+        new_cap_data = cap.to_dict()
+        new_cap_data["state"] = MESIState.INVALID
+        return Capability(**new_cap_data)
+
+    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        """
+        This is the "release" part of the RCC cycle.
+        If the operation count is exhausted, the capability is invalidated and
+        must be re-acquired from the authority.
+        """
+        # The check is `operations_used < max_operations`.
+        # When `operations_used == max_operations`, it's exhausted.
+        if capability.max_operations is not None and capability.operations_used >= capability.max_operations:
+            new_cap_data = capability.to_dict()
+            new_cap_data["state"] = MESIState.INVALID
+            # Trigger the 'acquire' cycle by entering a transient state.
+            new_cap_data["transient_state"] = TransientState.ISG # Invalid-to-Shared-waiting-Grant
+            new_cap_data["transient_entered_tick"] = agent.clock.now()
+            return Capability(**new_cap_data)
+
+        # Increment operations used *after* a successful action in the agent runtime
+        return capability
+
+    def on_tick(self, agent: AgentRuntime, tick: int):
+        pass # Exec-count strategy is not time-dependent

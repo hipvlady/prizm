@@ -1,52 +1,46 @@
-from dataclasses import dataclass
-from uuid import UUID
+from enum import Enum
+from typing import Set, Tuple
 
-from core.types import MESIState, MESITransitionError, TransientState
 
-TRANSITION_TABLE: dict[tuple[MESIState, str], MESIState] = {
-    (MESIState.INVALID, "grant_exclusive"): MESIState.EXCLUSIVE,
-    (MESIState.INVALID, "grant_shared"): MESIState.SHARED,
-    (MESIState.EXCLUSIVE, "acquire_shared"): MESIState.SHARED,
-    (MESIState.EXCLUSIVE, "write_hit"): MESIState.MODIFIED,
-    (MESIState.EXCLUSIVE, "read_hit"): MESIState.EXCLUSIVE,
-    (MESIState.EXCLUSIVE, "revoke"): MESIState.INVALID,
-    (MESIState.EXCLUSIVE, "ttl_expired"): MESIState.INVALID,
-    (MESIState.EXCLUSIVE, "count_exhausted"): MESIState.INVALID,
-    (MESIState.SHARED, "invalidate"): MESIState.INVALID,
-    (MESIState.SHARED, "write_hit"): MESIState.MODIFIED,
-    (MESIState.SHARED, "read_hit"): MESIState.SHARED,
-    (MESIState.SHARED, "revoke"): MESIState.INVALID,
-    (MESIState.SHARED, "ttl_expired"): MESIState.INVALID,
-    (MESIState.SHARED, "count_exhausted"): MESIState.INVALID,
-    (MESIState.MODIFIED, "write_hit"): MESIState.MODIFIED,
-    (MESIState.MODIFIED, "read_hit"): MESIState.MODIFIED,
-    (MESIState.MODIFIED, "revoke"): MESIState.INVALID,
-    (MESIState.MODIFIED, "ttl_expired"): MESIState.INVALID,
-    (MESIState.MODIFIED, "count_exhausted"): MESIState.INVALID,
+class MESIState(Enum):
+    """
+    Stable MESI states, formally mapping to capability states.
+    Source: Sorin, Hill, Wood — A Primer on Memory Consistency and Cache Coherence (2nd ed.), Ch. 6.4.1
+    """
+    MODIFIED = "Modified"       # Valid, exclusive, owned, dirty. The agent has delegated this capability, making the authority's copy stale. Only this agent's cache holds the current truth for its sub-tree.
+    EXCLUSIVE = "Exclusive"     # Valid, exclusive, clean. The agent is the sole holder of this capability.
+    SHARED = "Shared"           # Valid, not exclusive, clean. Multiple agents hold this capability.
+    INVALID = "Invalid"         # Not valid. The capability has been revoked, expired, exhausted, or timed out from a transient state.
+
+
+class TransientState(Enum):
+    """
+    Transient MESI states, representing in-flight transitions.
+    Source: Primer, Ch. 6.4.1 (XYZ notation: from X, going to Y, waiting for Z).
+    Per ADR-005, all transient states are subject to a fail-safe timeout.
+    """
+    ISG = "Invalid-to-Shared-waiting-Grant"
+    IED = "Invalid-to-Exclusive-waiting-Delegation"
+    EIA = "Exclusive-to-Invalid-waiting-Ack"
+    SIA = "Shared-to-Invalid-waiting-Ack"
+    MIC = "Modified-to-Invalid-waiting-Cascade"
+    MIA = "Modified-to-Invalid-waiting-Ack"
+
+# Valid state transitions for the MESI protocol
+VALID_TRANSITIONS: Set[Tuple[MESIState, MESIState]] = {
+    (MESIState.INVALID, MESIState.SHARED),
+    (MESIState.INVALID, MESIState.EXCLUSIVE),
+    (MESIState.SHARED, MESIState.INVALID),
+    (MESIState.SHARED, MESIState.EXCLUSIVE),
+    (MESIState.EXCLUSIVE, MESIState.SHARED),
+    (MESIState.EXCLUSIVE, MESIState.MODIFIED),
+    (MESIState.EXCLUSIVE, MESIState.INVALID),
+    (MESIState.MODIFIED, MESIState.INVALID),
+    (MESIState.MODIFIED, MESIState.SHARED),
 }
 
-
-def transition(current: MESIState, event: str) -> MESIState:
-    """Raises MESITransitionError for invalid transitions."""
-    if (current, event) not in TRANSITION_TABLE:
-        raise MESITransitionError(current, MESIState.INVALID, f"No transition for event '{event}'")
-    return TRANSITION_TABLE[(current, event)]
-
-
-def can_transition(current: MESIState, event: str) -> bool:
-    return (current, event) in TRANSITION_TABLE
-
-
-def is_valid_state(state: MESIState) -> bool:
-    return isinstance(state, MESIState)
-
-
-@dataclass
-class TransientCapability:
-    capability_id: UUID
-    from_state: MESIState
-    to_state: MESIState
-    waiting_for: str  # "ACK", "LEASE_EXPIRY", "COUNT_BOUNDARY"
-    transient_state: TransientState
-    tick_entered: float
-    timeout_ticks: int = 100
+def is_valid_transition(current_state: MESIState, next_state: MESIState) -> bool:
+    """
+    Checks if a transition between two MESI states is valid.
+    """
+    return (current_state, next_state) in VALID_TRANSITIONS

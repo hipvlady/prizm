@@ -4,6 +4,9 @@ strategy: eager
 agents: 10
 delegation_depth: 3
 operations_per_second: 5
+simulation:
+  duration_ticks: 200
+  action_probability: 0.1
 simulation_ticks: 200
 revocation:
   reason: COMPROMISED

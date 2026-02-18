@@ -1,17 +1,17 @@
 from typing import Optional, List, Dict
 from uuid import UUID, uuid4
 
-from core.clock import LogicalClock
-from core.types import (
+from src.core.clock import LogicalClock
+from src.core.types import (
     Capability,
     RevocationEvent,
     MESIState,
     RevocationReason,
     ScopeAttenuationError,
 )
-from authority.registry import CapabilityRegistry
-from authority.broadcaster import RevocationBroadcaster
-from authority.trust_scorer import TrustScorer
+from src.authority.registry import CapabilityRegistry
+from src.authority.broadcaster import RevocationBroadcaster
+from src.authority.trust_scorer import TrustScorer
 
 
 class AuthorityService:
@@ -44,8 +44,8 @@ class AuthorityService:
             agent_id=agent_id,
             resource=resource,
             state=MESIState.EXCLUSIVE,
-            granted_at=self.clock.now(),
-            expires_at=expires_at,
+            granted_tick=self.clock.now(),
+            expires_tick=expires_at,
             max_operations=max_operations,
             scope=tuple(scope) if scope else (),
             delegator_id=delegator_id,
@@ -61,7 +61,7 @@ class AuthorityService:
             id=uuid4(),
             capability_id=capability_id,
             reason=reason,
-            issued_at=self.clock.now(),
+            issued_tick=self.clock.now(),
             cascade=cascade,
         )
         
@@ -69,14 +69,11 @@ class AuthorityService:
         if not cap:
             raise ValueError(f"Capability {capability_id} not found")
 
-        self.registry.update_state(capability_id, MESIState.INVALID)
-        
         agents_to_notify = [cap.agent_id]
 
         if cascade:
-            descendants = self.registry.get_all_descendants(capability_id)
+            descendants = self.registry.get_delegation_chain(capability_id)
             for descendant in descendants:
-                self.registry.update_state(descendant.id, MESIState.INVALID)
                 agents_to_notify.append(descendant.agent_id)
         
         self.broadcaster.broadcast(event, agents_to_notify)
@@ -104,20 +101,4 @@ class AuthorityService:
             delegator_id=from_agent_id,
             parent_cap_id=parent_cap_id,
         )
-
-    def check_capability(self, agent_id: UUID, resource: str) -> Dict:
-        caps = self.registry.get_for_agent(agent_id)
-        for cap in caps:
-            if cap.resource == resource:
-                ttl_remaining = cap.expires_at - self.clock.now() if cap.expires_at else None
-                return {
-                    "valid": cap.state != MESIState.INVALID,
-                    "state": cap.state,
-                    "remaining_ops": cap.max_operations - cap.operations_used if cap.max_operations is not None else None,
-                    "ttl_remaining": ttl_remaining,
-                }
-        return {"valid": False, "state": MESIState.INVALID, "remaining_ops": None, "ttl_remaining": None}
-
-    def get_revocation_status(self, event_id: UUID) -> Dict:
-        return self.broadcaster.get_propagation_status(event_id)
 

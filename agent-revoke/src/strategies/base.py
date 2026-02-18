@@ -1,45 +1,38 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Dict
-from uuid import UUID
+from typing import TYPE_CHECKING
 
-from from core.types import RevocationEvent, ActionResult, Capability
-from from authority.service import AuthorityService
-from from agent.runtime import AgentRuntime
-
-
-@dataclass
-class StrategyResult:
-    strategy: str
-    propagation_complete: bool
-    agents_notified: int
-    agents_acked: int
-    ticks_elapsed: int
-    unauthorized_ops_during_propagation: int  # KEY METRIC
-
+if TYPE_CHECKING:
+    from agent.runtime import AgentRuntime
+    from core.types import Capability, RevocationEvent
 
 class RevocationStrategy(ABC):
-    name: str
-    coherence_class: str  # "consistency-agnostic" or "consistency-directed"
+    """
+    Abstract Base Class for all revocation strategies.
+    Each strategy defines a different coherence protocol for managing capability state between the agent (PEP) and the authority (PDP).
+    """
 
     @abstractmethod
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        ...
+    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        """Called when a new capability is granted to the agent."""
+        pass
 
     @abstractmethod
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        ...
+    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
+        """Called when a capability is delegated from this agent to another."""
+        pass
 
     @abstractmethod
-    def get_staleness_bound(self) -> str:
-        """Human-readable bound: '60s TTL', 'N=50 ops', 'network_latency', 'check_interval'"""
+    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Capability:
+        """Called when a revocation event is received for a capability held by the agent."""
+        pass
+
+    @abstractmethod
+    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+        """Called before an agent attempts to use a capability."""
+        pass
+
+    @abstractmethod
+    def on_tick(self, agent: AgentRuntime, tick: int):
+        """Called on every simulation tick to handle time-based logic (e.g., leases)."""
+        pass

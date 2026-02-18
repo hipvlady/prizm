@@ -4,6 +4,9 @@ strategies: [exec_count, lease]
 agents: 3
 delegation_depth: 1
 operations_per_second: 100
+simulation:
+  duration_ticks: 700
+  action_probability: 0.1
 simulation_ticks: 700
 credentials:
   exec_count_max_operations: 50
