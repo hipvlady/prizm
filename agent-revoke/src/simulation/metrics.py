@@ -15,6 +15,20 @@ class SimulationMetrics:
     total_actions: int
     unauthorized_actions_count: int
     unauthorized_actions_by_depth: Dict[int, int]
+    
+    # Newly added metrics from spec §2.4
+    revocation_latency_p50: float = 0.0
+    revocation_latency_p99: float = 0.0
+    staleness_window_max: int = 0
+    transient_state_duration_avg: float = 0.0
+    transient_state_duration_max: int = 0
+    transient_state_timeouts: int = 0
+    unauthorized_actions_in_transient: int = 0
+    unauthorized_actions_impact: int = 0
+    convergence_time: int = 0
+    message_overhead: int = 0
+    revalidation_count: int = 0
+    operations_wasted_on_revalidation: int = 0
 
     def summary_table(self) -> str:
         table = Table(title=f"Metrics for {self.scenario} with {self.strategy} strategy")
@@ -24,6 +38,10 @@ class SimulationMetrics:
         table.add_row("Total Ticks", str(self.total_ticks))
         table.add_row("Total Actions", str(self.total_actions))
         table.add_row("Unauthorized Actions", str(self.unauthorized_actions_count))
+        table.add_row("Max Staleness Window (ticks)", str(self.staleness_window_max))
+        table.add_row("Convergence Time (ticks)", str(self.convergence_time))
+        table.add_row("Transient State Timeouts", str(self.transient_state_timeouts))
+        table.add_row("Message Overhead", str(self.message_overhead))
 
         for depth, count in sorted(self.unauthorized_actions_by_depth.items()):
             table.add_row(f"  Unauthorized at Depth {depth}", str(count))
@@ -48,6 +66,8 @@ class MetricsCollector:
         self._unauthorized_actions_by_depth[record.delegation_depth] += 1
 
     def finalize(self, scenario: str, strategy: str, total_ticks: int) -> SimulationMetrics:
+        # TODO: Implement calculation for all the new metrics.
+        # For now, they will return their default values.
         return SimulationMetrics(
             scenario=scenario,
             strategy=strategy,
