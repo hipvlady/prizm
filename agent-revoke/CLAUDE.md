@@ -26,20 +26,32 @@ MESI cache coherence adapted for multi-agent authorization. Python 3.11+, ~10h b
 | `simulation-scenario-engineer` | `src/simulation/*`, `src/output/*`, `scenarios/` |
 | `security-correctness-reviewer` | pre-checkpoint gate |
 
-## Checkpoints
+| `code-standards-enforcer` | tooling config, auto-fix, quality gates |
+| `code-reviewer` | all `src/` (read-only), checkpoint gates + pre-PR |
 
-Step1 → Step2 → Step3 → Step4 → Step5 → Step6. Sequential, never skip.
+## Task Breakdown
 
-## Parallelism
+| # | Task | Agent | Blocked By | Phase |
+|---|------|-------|------------|-------|
+| 1 | Core domain types | mesi-domain | — | A |
+| 2 | MESI state machine | mesi-domain | #1 | B |
+| 3 | Logical clock | mesi-domain | #1 | B |
+| 4 | AuthorityService (PDP) | authority-runtime | #1, #3 | C |
+| 5 | AgentRuntime (PEP) + cache | authority-runtime | #1, #2 | C |
+| 6 | TrustScorer | authority-runtime | #1 | B |
+| 7 | 4 revocation strategies | mesi-domain | #1, #2 | C |
+| 8 | Simulation engine + bus | simulation-scenario | #4, #5, #7 | D |
+| 9 | 3 scenario configs | simulation-scenario | #8 | E |
+| 10 | Terminal viz (rich) | simulation-scenario | #8 | E |
+| 11 | HTML report (Jinja2) | simulation-scenario | #8 | E |
+
+## Execution Phases
 
 ```
-A: Step 1                    — foundation
-B: Step 2 ‖ Step 3           — different files, no shared state
-C: Step 4                    — wires strategies + runtime
-D: Step 5 ‖ Step 6           — independent renderers
+A: #1 → B: #2 ‖ #3 ‖ #6 → C: #4 ‖ #5 ‖ #7 → D: #8 → E: #9 ‖ #10 ‖ #11
 ```
 
-Launch parallel steps in a single message with multiple Task calls.
+Critical path: `#1 → #2 → #7 → #8 → #10`. Launch parallel tasks in a single message.
 
 ## Workflow
 

@@ -1,0 +1,20 @@
+scenario: anomaly-autorevoke
+description: "Behavioral anomaly triggers automatic revocation via trust scoring"
+strategy: lazy
+agents: 5
+simulation_ticks: 200
+anomaly:
+  inject_at_tick: 80
+  type: bulk_ops
+  target_agent: agent-3
+trust:
+  initial_score: 0.8
+  anomaly_threshold: 0.3
+  decay_on_anomaly: 0.3
+revocation:
+  trigger_at_tick: 9999
+  reason: EXPLICIT
+  cascade: false
+expected_outcome:
+  auto_revocation: true
+  detection_latency_max_ticks: 20

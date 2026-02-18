@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Report: {{ scenario }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        h1, h2 { color: #333; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Simulation Report: {{ scenario }}</h1>
+    <h2>Strategy: {{ strategy }}</h2>
+    
+    <table>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Unauthorized Operations</td>
+            <td>{{ unauthorized_ops }}</td>
+        </tr>
+        <tr>
+            <td>P50 Revocation Latency (ticks)</td>
+            <td>{{ p50_latency }}</td>
+        </tr>
+        <tr>
+            <td>P99 Revocation Latency (ticks)</td>
+            <td>{{ p99_latency }}</td>
+        </tr>
+        <tr>
+            <td>Convergence Time (ticks)</td>
+            <td>{{ convergence_time }}</td>
+        </tr>
+    </table>
+
+    <canvas id="metricsChart" width="400" height="200"></canvas>
+
+    <script>
+        const ctx = document.getElementById('metricsChart').getContext('2d');
+        const metricsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Unauthorized Ops', 'P50 Latency', 'P99 Latency', 'Convergence Time'],
+                datasets: [{
+                    label: 'Metrics',
+                    data: [{{ unauthorized_ops }}, {{ p50_latency }}, {{ p99_latency }}, {{ convergence_time }}],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
