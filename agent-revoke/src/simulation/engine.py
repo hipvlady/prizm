@@ -62,6 +62,8 @@ class SimulationEngine:
         self.message_bus = deque()
         self._depth_unauthorized_counts: Dict[int, int] = defaultdict(int)
         self._remaining_ops_at_revoke_by_depth: Dict[int, int] = {}
+        self._bound_violation_recorded_depths: set[int] = set()
+        self._anomaly_revoked_agents: set[UUID] = set()
         self.live_view = SimulationLiveView(
             enabled=bool(self.config["simulation"].get("live_output", False))
         )
@@ -174,7 +176,7 @@ class SimulationEngine:
         self._run_agent_maintenance(tick)
         self._trigger_scheduled_revocations(tick)
         self._run_agent_actions(tick)
-        self._run_anomaly_detection()
+        self._run_anomaly_detection(tick)
         self.consistency_monitor.check_staleness(self.agents, tick, self.authority.registry)
 
     def _process_message_bus(self, tick: int) -> None:
@@ -213,13 +215,14 @@ class SimulationEngine:
     def _run_agent_actions(self, tick: int) -> None:
         """Run action attempts and stale credential accounting for all agents."""
         actions_per_tick = self.config["simulation"].get("actions_per_tick")
-        for agent in self.agents.values():
-            if actions_per_tick is None:
-                if self.rng.random() >= self.config["simulation"]["action_probability"]:
-                    continue
-                attempts = 1
-            else:
-                attempts = max(0, int(actions_per_tick))
+        for idx, agent in enumerate(self.agents.values()):
+            attempts = self._determine_action_attempts_for_agent(
+                tick=tick,
+                agent_index=idx,
+                actions_per_tick=actions_per_tick,
+            )
+            if attempts <= 0:
+                continue
 
             for _ in range(attempts):
                 agent_caps = list(agent.state.capabilities.values())
@@ -245,9 +248,42 @@ class SimulationEngine:
                         self._depth_unauthorized_counts[depth] += 1
                         self._check_bound_violation(depth)
 
-    def _run_anomaly_detection(self) -> None:
+    def _determine_action_attempts_for_agent(
+        self,
+        *,
+        tick: int,
+        agent_index: int,
+        actions_per_tick: int | None,
+    ) -> int:
+        """Return action attempts for one agent in the current tick."""
+        scenario_conf = self.config.get("scenario", {})
+        anomaly_start = scenario_conf.get("anomaly_behavior_starts_tick")
+        anomaly_target = int(scenario_conf.get("anomaly_target_agent_index", 0))
+        anomaly_burst = int(scenario_conf.get("anomaly_burst_actions_per_tick", 0))
+
+        if (
+            anomaly_start is not None
+            and tick >= anomaly_start
+            and agent_index == anomaly_target
+            and anomaly_burst > 0
+        ):
+            return anomaly_burst
+
+        if actions_per_tick is None:
+            if self.rng.random() >= self.config["simulation"]["action_probability"]:
+                return 0
+            return 1
+        return max(0, int(actions_per_tick))
+
+    def _run_anomaly_detection(self, tick: int) -> None:
         """Run trust scorer anomaly detection and trigger auto-revocation."""
+        anomaly_start = self.config.get("scenario", {}).get("anomaly_behavior_starts_tick")
+        if anomaly_start is not None and tick < anomaly_start:
+            return
+
         for agent in self.agents.values():
+            if agent.agent_id in self._anomaly_revoked_agents:
+                continue
             is_anomaly = self.authority.trust_scorer.check_anomaly(
                 agent.agent_id, agent.state.action_history
             )
@@ -264,6 +300,7 @@ class SimulationEngine:
                             reason=RevocationReason.TRUST_VIOLATION,
                             cascade=True,
                         )
+                        self._anomaly_revoked_agents.add(agent.agent_id)
                         break
 
     def _snapshot_remaining_ops_by_depth(self, root_capability_id: UUID, cascade: bool) -> Dict[int, int]:
@@ -284,6 +321,8 @@ class SimulationEngine:
 
     def _check_bound_violation(self, depth: int) -> None:
         """Check and record per-depth unauthorized bound violations."""
+        if depth in self._bound_violation_recorded_depths:
+            return
         bound = calculate_depth_bound(
             self.strategy_name,
             depth,
@@ -291,6 +330,7 @@ class SimulationEngine:
             remaining_ops_at_revoke=self._remaining_ops_at_revoke_by_depth.get(depth),
         )
         if self._depth_unauthorized_counts[depth] > bound:
+            self._bound_violation_recorded_depths.add(depth)
             self.metrics_collector.record_bound_violation(depth)
 
     def _setup_scenario(self):

@@ -70,8 +70,20 @@ class AgentCache:
                 return cap
         return None
 
-    def invalidate(self, capability_id: UUID):
-        """Force a capability into ``INVALID`` stable state."""
+    def invalidate(self, capability_id: UUID) -> bool:
+        """Force a capability into ``INVALID`` stable state.
+
+        Parameters
+        ----------
+        capability_id : UUID
+            Capability identifier.
+
+        Returns
+        -------
+        bool
+            ``True`` when a non-invalid capability was transitioned to
+            ``INVALID``.
+        """
         cap = self.get(capability_id)
         if cap and cap.state != MESIState.INVALID:
             new_cap_data = cap.to_dict()
@@ -79,6 +91,8 @@ class AgentCache:
             new_cap_data["transient_state"] = None
             new_cap_data["transient_entered_tick"] = None
             self.update(Capability(**new_cap_data))
+            return True
+        return False
 
     def enter_transient_state(self, capability_id: UUID, transient_state: TransientState, tick: int):
         """Set capability into transient state with entry tick."""
@@ -98,11 +112,25 @@ class AgentCache:
             new_cap_data["transient_entered_tick"] = None
             self.update(Capability(**new_cap_data))
 
-    def check_transient_timeouts(self, tick: int):
-        """Apply ADR-005 fail-safe timeout for transient states."""
+    def check_transient_timeouts(self, tick: int) -> list[UUID]:
+        """Apply ADR-005 fail-safe timeout for transient states.
+
+        Parameters
+        ----------
+        tick : int
+            Current logical tick.
+
+        Returns
+        -------
+        list[UUID]
+            Capability identifiers forced to ``INVALID`` by timeout.
+        """
+        timed_out: list[UUID] = []
         for cap_id, cap in list(self.state.capabilities.items()):
             if cap.transient_state and cap.transient_entered_tick is not None:
                 if (tick - cap.transient_entered_tick) > self.transient_timeout_ticks:
-                    self.invalidate(cap_id)
+                    if self.invalidate(cap_id):
+                        timed_out.append(cap_id)
                     if self.metrics_collector is not None:
                         self.metrics_collector.record_transient_timeout()
+        return timed_out

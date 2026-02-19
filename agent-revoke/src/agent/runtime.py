@@ -100,13 +100,13 @@ class AgentRuntime:
         if event.cascade and event.expected_capabilities:
             for cap_id, cap in list(self.state.capabilities.items()):
                 if cap_id in event.expected_capabilities and cap.state != MESIState.INVALID:
-                    self.invalidate_capability(cap_id)
-                    invalidated.add(cap_id)
+                    if self.invalidate_capability(cap_id, ack_tick):
+                        invalidated.add(cap_id)
         else:
             cap = self.state.capabilities.get(event.capability_id)
             if cap is not None and cap.state != MESIState.INVALID:
-                self.invalidate_capability(event.capability_id)
-                invalidated.add(event.capability_id)
+                if self.invalidate_capability(event.capability_id, ack_tick):
+                    invalidated.add(event.capability_id)
 
         for cap_id in invalidated:
             event.invalidated_capabilities.add(cap_id)
@@ -118,9 +118,26 @@ class AgentRuntime:
             event.capability_id,
         )
 
-    def invalidate_capability(self, capability_id: UUID):
-        """Invalidate a capability in local cache."""
-        self.cache.invalidate(capability_id)
+    def invalidate_capability(self, capability_id: UUID, tick: Optional[int] = None) -> bool:
+        """Invalidate a capability in local cache.
+
+        Parameters
+        ----------
+        capability_id : UUID
+            Capability identifier.
+        tick : int, optional
+            Tick associated with invalidation. Defaults to current clock tick.
+
+        Returns
+        -------
+        bool
+            ``True`` when the capability transitioned to ``INVALID``.
+        """
+        changed = self.cache.invalidate(capability_id)
+        if changed:
+            invalidated_tick = self.clock.now() if tick is None else tick
+            self.monitor.mark_capability_invalidated_for_active_events(capability_id, invalidated_tick)
+        return changed
 
     def attempt_action(self, resource: str, tick: int) -> ActionRecord:
         """Attempt an action against a resource.
@@ -167,7 +184,9 @@ class AgentRuntime:
         tick : int
             Current logical tick.
         """
-        self.cache.check_transient_timeouts(tick)
+        timed_out = self.cache.check_transient_timeouts(tick)
+        for capability_id in timed_out:
+            self.monitor.mark_capability_invalidated_for_active_events(capability_id, tick)
 
     def _record_action(
         self,

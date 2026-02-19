@@ -16,6 +16,8 @@ scenario:
   cascade_revocation: false
   revocation_trigger_tick: null # No manual revocation
   anomaly_behavior_starts_tick: 50 # Simulation should model anomalous behavior starting at this tick
+  anomaly_target_agent_index: 0
+  anomaly_burst_actions_per_tick: 12 # Bursty behaviour to trigger trust anomaly detector
 
 strategies:
   lazy:

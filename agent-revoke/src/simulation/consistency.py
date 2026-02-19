@@ -72,6 +72,29 @@ class ConsistencyMonitor:
                 object.__setattr__(event, "cascade_completion_tick", current_tick)
                 self._cascade_completion_latencies.append(current_tick - event.issued_tick)
 
+    def mark_capability_invalidated_for_active_events(
+        self, capability_id: UUID, current_tick: int
+    ) -> None:
+        """Record invalidation progress for any known event tracking the capability.
+
+        Parameters
+        ----------
+        capability_id : UUID
+            Capability that transitioned to ``INVALID`` locally.
+        current_tick : int
+            Tick when the transition happened.
+        """
+        event_ids: List[UUID] = []
+        for event_id, monitored in self._pending_events.items():
+            if capability_id in monitored.event.expected_capabilities:
+                event_ids.append(event_id)
+        for event_id, monitored in self._completed_events.items():
+            if capability_id in monitored.event.expected_capabilities:
+                event_ids.append(event_id)
+
+        for event_id in event_ids:
+            self.mark_capability_invalidated(event_id, capability_id, current_tick)
+
     def get_convergence_latencies(self) -> List[int]:
         """Return convergence latencies for completed events."""
         return self._convergence_latencies

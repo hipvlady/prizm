@@ -34,7 +34,15 @@ def calculate_depth_bound(
     """
     simulation = config.get("simulation", {})
     strategies = config.get("strategies", {})
-    velocity = simulation.get("actions_per_tick", simulation.get("action_probability", 1))
+    if "actions_per_tick" in simulation:
+        velocity = max(0, int(simulation.get("actions_per_tick", 0)))
+    else:
+        action_probability = float(simulation.get("action_probability", 0.0))
+        # For probabilistic workloads, use worst-case one action per tick to avoid
+        # under-estimating security bounds from expected-value rates.
+        velocity = 1 if action_probability > 0 else 0
+        anomaly_burst = int(config.get("scenario", {}).get("anomaly_burst_actions_per_tick", 0))
+        velocity = max(velocity, anomaly_burst)
     network_latency = simulation.get("latency_ticks", 1)
 
     if strategy == "eager":

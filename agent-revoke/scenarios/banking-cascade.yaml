@@ -18,11 +18,11 @@ scenario:
 
 strategies:
   lazy:
-    check_interval_ticks: 10
+    check_interval_ticks: 40 # Deliberately larger than eager push latency to expose stale window gap
   lease:
-    default_ttl_ticks: 3000
+    default_ttl_ticks: 120 # Ensure lease strategy converges within simulation horizon
   exec_count:
-    max_operations: 100
+    max_operations: 60 # Encourage bounded convergence before simulation ends
 
 trust:
   initial_score: 0.8

@@ -108,7 +108,7 @@ class AuthorityService:
         Capability
             Granted capability object.
         """
-        expires_at = self.clock.now() + ttl if ttl else None
+        expires_at = self.clock.now() + ttl if ttl is not None else None
         parent = self.registry.get(parent_cap_id) if parent_cap_id else None
         cap = Capability(
             id=uuid4(),
@@ -260,6 +260,7 @@ class AuthorityService:
             raise ScopeAttenuationError(tuple(attenuated_scope), parent_cap.scope)
 
         remaining_ops = None
+        remaining_ttl = None
         child_depth = parent_cap.delegation_depth + 1
         if child_depth > self.delegation_policy.max_depth:
             raise DelegationDepthExceededError(
@@ -281,10 +282,14 @@ class AuthorityService:
                     "cannot delegate exhausted capability (remaining operations == 0)",
                 )
 
+        if parent_cap.expires_tick is not None:
+            remaining_ttl = max(0, parent_cap.expires_tick - self.clock.now())
+
         child = self.grant_capability(
             agent_id=to_agent_id,
             resource=parent_cap.resource,
             scope=attenuated_scope,
+            ttl=remaining_ttl,
             max_operations=remaining_ops,
             delegator_id=from_agent_id,
             parent_cap_id=parent_cap_id,
