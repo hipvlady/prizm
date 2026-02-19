@@ -1,13 +1,13 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
-from .base import RevocationStrategy
+from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
 from src.core.mesi import MESIState
-from src.core.types import RevocationReason
+from src.core.types import Capability
 
 if TYPE_CHECKING:
-    from agent.runtime import AgentRuntime
-    from core.types import Capability, RevocationEvent
+    from src.agent.runtime import AgentRuntime
+    from src.core.types import RevocationEvent, ActionRecord
 
 
 class LeaseBasedStrategy(RevocationStrategy):
@@ -16,35 +16,56 @@ class LeaseBasedStrategy(RevocationStrategy):
     Each capability is granted with a TTL (`expires_tick`). The agent is responsible
     for honoring this limit and self-invalidating its cache.
     """
+    name: str = "lease"
+    coherence_class: CoherenceClass = CoherenceClass.CONSISTENCY_DIRECTED
+    bound_type: BoundType = BoundType.TIME
+
     def __init__(self, default_ttl_ticks: int = 500):
         self.default_ttl_ticks = default_ttl_ticks
+        self._metrics = StrategyMetrics()
 
-    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
-        return capability
+    def initiate_revocation(self, event: "RevocationEvent", agents: List["AgentRuntime"]) -> None:
+        # Authority can still send an out-of-band revocation to cut a lease short.
+        # The generic `on_revocation_received` in AgentRuntime will handle it.
+        pass
 
-    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
-        new_parent_data = parent_cap.to_dict()
-        new_parent_data["state"] = MESIState.MODIFIED
-        new_parent_cap = Capability(**new_parent_data)
-        return new_parent_cap, child_cap
-
-    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Capability:
-        """Authority can still send an out-of-band revocation to cut a lease short."""
-        cap = agent.state.capabilities[event.capability_id]
-        new_cap_data = cap.to_dict()
-        new_cap_data["state"] = MESIState.INVALID
-        return Capability(**new_cap_data)
-
-    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+    def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """Check for expiration before use."""
-        if capability.expires_tick is not None and agent.clock.now() >= capability.expires_tick:
-            new_cap_data = capability.to_dict()
-            new_cap_data["state"] = MESIState.INVALID
-            return Capability(**new_cap_data)
-        return capability
+        if capability.state == MESIState.INVALID:
+            return ActionResult.DENIED
 
-    def on_tick(self, agent: AgentRuntime, tick: int):
+        if capability.expires_tick is not None and agent.clock.now() >= capability.expires_tick:
+            agent.invalidate_capability(capability.id)
+            return ActionResult.EXPIRED
+            
+        return ActionResult.ALLOWED
+
+    def on_tick(self, agent: "AgentRuntime", tick: int) -> None:
         """Proactively check for and invalidate expired leases."""
         for cap_id, cap in list(agent.state.capabilities.items()):
             if cap.state != MESIState.INVALID and cap.expires_tick is not None and tick >= cap.expires_tick:
-                agent.invalidate_capability(cap_id, RevocationReason.EXPIRED, tick)
+                agent.invalidate_capability(cap_id)
+
+    def record_action(self, agent: "AgentRuntime", capability: "Capability", action: "ActionRecord") -> None:
+        pass  # No specific recording logic for lease-based strategy
+
+    def revalidate(self, agent: "AgentRuntime", capability: "Capability") -> Optional["Capability"]:
+        """
+        Requests a new capability from the authority after the old one has expired.
+        """
+        # The capability is already marked as INVALID by validate_action
+        new_cap = agent.authority.grant_capability(
+            agent_id=agent.agent_id,
+            resource=capability.resource,
+            scope=capability.scope,
+            ttl=self.default_ttl_ticks,
+        )
+        if new_cap:
+            agent.cache.update(new_cap)
+        return new_cap
+
+    def get_metrics(self) -> "StrategyMetrics":
+        return self._metrics
+
+    def get_theoretical_bound(self) -> str:
+        return f"Staleness is bounded by the lease TTL (default: {self.default_ttl_ticks} ticks)."

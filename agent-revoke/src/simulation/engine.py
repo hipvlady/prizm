@@ -19,6 +19,7 @@ from src.strategies.lazy import LazyInvalidationStrategy
 from src.strategies.lease import LeaseBasedStrategy
 from src.strategies.exec_count import ExecCountStrategy
 from src.simulation.metrics import MetricsCollector
+from src.simulation.consistency import ConsistencyMonitor
 
 class SimulationEngine:
     """
@@ -28,31 +29,42 @@ class SimulationEngine:
     - Initializes all components (Authority, Agents, Strategies).
     - Collects and reports metrics.
     """
-    def __init__(self, config: Dict[str, Any], strategy_name: str):
+    def __init__(self, config: Dict[str, Any], strategy_name: str, scenario_name: str):
         self.config = config
         self.clock = LogicalClock()
+        self.strategy_name = strategy_name
+        self.scenario_name = scenario_name
         
-        # Messaging
+        # Core Components
+        self.consistency_monitor = ConsistencyMonitor()
+        self.metrics_collector = MetricsCollector()
         self.message_bus = deque()
-        latency_ticks = self.config['simulation'].get('latency_ticks', 1)
         
         # Authority (PDP)
+        latency_ticks = self.config['simulation'].get('latency_ticks', 1)
         registry = CapabilityRegistry()
-        broadcaster = RevocationBroadcaster(self.message_bus, latency_ticks, self.clock)
+        broadcaster = RevocationBroadcaster(self.message_bus, latency_ticks, self.clock, self.metrics_collector)
         trust_scorer = TrustScorer()
-        self.authority = AuthorityService(registry, broadcaster, trust_scorer, self.clock)
+        self.authority = AuthorityService(registry, broadcaster, trust_scorer, self.clock, self.consistency_monitor)
         
         # Strategy
-        strategy = self._create_strategy(strategy_name)
+        self.strategy = self._create_strategy(strategy_name)
         
         # Agents (PEPs)
         self.agents: Dict[UUID, AgentRuntime] = {}
         transient_timeout_ticks = self.config['simulation'].get('transient_timeout_ticks', 5)
         for _ in range(config['simulation']['agents']):
             agent_id = uuid4()
-            self.agents[agent_id] = AgentRuntime(agent_id, self.authority, strategy, self.clock, transient_timeout_ticks)
+            self.agents[agent_id] = AgentRuntime(
+                agent_id=agent_id, 
+                authority=self.authority, 
+                strategy=self.strategy, 
+                clock=self.clock, 
+                transient_timeout_ticks=transient_timeout_ticks,
+                monitor=self.consistency_monitor,
+                metrics_collector=self.metrics_collector
+            )
 
-        self.metrics_collector = MetricsCollector()
         self.config['scenario']['root_capability_id'] = None
 
     def _create_strategy(self, name: str) -> RevocationStrategy:
@@ -71,20 +83,21 @@ class SimulationEngine:
 
     def run(self):
         self._setup_scenario()
-
-        for tick in range(self.config['simulation']['duration_ticks']):
+        
+        duration_ticks = self.config['simulation']['duration_ticks']
+        for tick in range(duration_ticks):
             self.clock.advance()
             current_tick = self.clock.now()
             self._tick(current_tick)
         
-        return self.metrics_collector.finalize()
+        return self.metrics_collector.finalize(self.scenario_name, self.strategy_name, duration_ticks, self.consistency_monitor)
 
     def _tick(self, tick: int):
         # 1. Process Message Bus
         for _ in range(len(self.message_bus)):
-            if self.message_bus[0]['deliver_at'] <= tick:
+            if self.message_bus and self.message_bus[0]['deliver_at'] <= tick:
                 msg = self.message_bus.popleft()
-                self.agents[msg['recipient']].on_revocation_received(msg['event'])
+                self.agents[msg['recipient']].on_revocation_received(msg['event'], tick)
 
         # 2. Run agent-level and strategy-level tick logic
         for agent in self.agents.values():
@@ -94,6 +107,7 @@ class SimulationEngine:
         # 3. Agents attempt actions
         for agent in self.agents.values():
             if random.random() < self.config['simulation']['action_probability']:
+                # TODO: Use a more realistic resource selection
                 action_record = agent.attempt_action("resource:read_write", tick)
                 self.metrics_collector.record_action(action_record)
                 if not action_record.authorized:
@@ -109,6 +123,21 @@ class SimulationEngine:
                     reason=RevocationReason.EXPLICIT,
                     cascade=self.config['scenario']['cascade_revocation']
                 )
+        
+        # 5. Run trust scorer for anomaly detection
+        for agent in self.agents.values():
+            is_anomaly = self.authority.trust_scorer.check_anomaly(agent.agent_id, agent.state.action_history)
+            if is_anomaly:
+                # Auto-revocation trigger
+                for cap in agent.state.capabilities.values():
+                    if cap.state != MESIState.INVALID:
+                        self.authority.revoke_capability(
+                            capability_id=cap.id,
+                            reason=RevocationReason.TRUST_VIOLATION,
+                            cascade=True 
+                        )
+                        # For simplicity, revoke one capability and move to the next agent
+                        break
 
     def _setup_scenario(self):
         scenario_conf = self.config['scenario']
@@ -123,7 +152,10 @@ class SimulationEngine:
             ttl=self.config['strategies'].get('lease', {}).get('default_ttl_ticks'),
             max_operations=self.config['strategies'].get('exec_count', {}).get('max_operations')
         )
-        root_agent.state.capabilities[root_cap.id] = root_cap
+        # This is incorrect, the agent should update its own state
+        # root_agent.state.capabilities[root_cap.id] = root_cap
+        # A method on agent runtime should be called to add the capability
+        root_agent.cache.update(root_cap)
         self.config['scenario']['root_capability_id'] = root_cap.id
 
         parent_agent = root_agent
@@ -137,7 +169,8 @@ class SimulationEngine:
                 parent_cap_id=parent_cap.id,
                 attenuated_scope=("read",)
             )
-            child_agent.state.capabilities[child_cap.id] = child_cap
+            # child_agent.state.capabilities[child_cap.id] = child_cap
+            child_agent.cache.update(child_cap)
             parent_agent = child_agent
             parent_cap = child_cap
 
@@ -150,7 +183,7 @@ def main():
     with open(args.scenario, 'r') as f:
         config = yaml.safe_load(f)
 
-    engine = SimulationEngine(config, args.strategy)
+    engine = SimulationEngine(config, args.strategy, args.scenario)
     metrics = engine.run()
     print(metrics)
 

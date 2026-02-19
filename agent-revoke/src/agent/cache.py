@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import Dict, Optional
 from uuid import UUID
 
-from src.core.types import AgentState, Capability, RevocationReason
-from src.core.mesi import MESIState
+from src.core.types import AgentState, Capability
+from src.core.mesi import MESIState, TransientState
 
 class AgentCache:
     """
@@ -40,12 +40,23 @@ class AgentCache:
                 return cap
         return None
 
-    def invalidate(self, capability_id: UUID, reason: RevocationReason):
+    def invalidate(self, capability_id: UUID):
         """Marks a capability as Invalid in the cache."""
         cap = self.get(capability_id)
         if cap and cap.state != MESIState.INVALID:
             new_cap_data = cap.to_dict()
             new_cap_data["state"] = MESIState.INVALID
+            new_cap_data["transient_state"] = None
+            new_cap_data["transient_entered_tick"] = None
+            self.update(Capability(**new_cap_data))
+
+    def enter_transient_state(self, capability_id: UUID, transient_state: TransientState, tick: int):
+        """Enters a transient state."""
+        cap = self.get(capability_id)
+        if cap:
+            new_cap_data = cap.to_dict()
+            new_cap_data["transient_state"] = transient_state
+            new_cap_data["transient_entered_tick"] = tick
             self.update(Capability(**new_cap_data))
     
     def check_transient_timeouts(self, tick: int):
@@ -56,4 +67,4 @@ class AgentCache:
         for cap_id, cap in list(self.state.capabilities.items()):
             if cap.transient_state and cap.transient_entered_tick is not None:
                 if (tick - cap.transient_entered_tick) > self.transient_timeout_ticks:
-                    self.invalidate(cap_id, RevocationReason.TIMEOUT_FAILSAFE)
+                    self.invalidate(cap_id)

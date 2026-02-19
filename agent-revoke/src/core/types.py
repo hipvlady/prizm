@@ -5,6 +5,7 @@ from typing import Optional, Dict, List
 from uuid import UUID, uuid4
 
 from .mesi import MESIState, TransientState
+from ..strategies.base import ActionResult
 
 
 class RevocationReason(Enum):
@@ -17,18 +18,6 @@ class RevocationReason(Enum):
     COMPROMISED = "compromised"
     TIMEOUT_FAILSAFE = "transient_state_timeout"  # ADR-005
     REVALIDATING = "revalidating"
-
-
-class ActionResult(Enum):
-    """The result of an agent's attempted action."""
-    ALLOWED = "allowed"
-    DENIED_INVALID = "denied_invalid_state"
-    DENIED_TRANSIENT = "denied_transient_state"
-    DENIED_SCOPE = "denied_scope_mismatch"
-    PENDING_REVALIDATION = "pending_revalidation" # For RCC 'acquire' cycle
-    EXPIRED = "expired"                          # For Temporal Coherence self-invalidation
-    EXHAUSTED = "exhausted"                      # For RCC 'release' cycle
-    TIMED_OUT = "timed_out"                      # ADR-005
 
 
 class ScopeAttenuationError(Exception):

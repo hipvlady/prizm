@@ -6,17 +6,14 @@ from src.core.clock import LogicalClock
 from src.core.types import Capability, RevocationEvent, RevocationReason
 from src.core.mesi import MESIState, TransientState
 from src.agent.runtime import AgentRuntime
+from src.strategies.base import ActionResult
+from src.strategies.exec_count import ExecCountStrategy
 
 @pytest.fixture
 def mock_strategy():
-    """A mock revocation strategy that simply reflects state."""
+    """A mock revocation strategy that allows all actions."""
     strategy = MagicMock()
-    
-    def on_action_passthrough(agent, cap):
-        # Simply return the capability as-is
-        return cap
-    
-    strategy.on_action.side_effect = on_action_passthrough
+    strategy.validate_action.return_value = ActionResult.ALLOWED
     return strategy
 
 @pytest.fixture
@@ -58,10 +55,18 @@ def test_transient_state_timeout(agent_runtime):
     assert updated_cap is not None
     assert updated_cap.state == MESIState.INVALID
 
-def test_operation_counting(agent_runtime):
+def test_operation_counting():
     """
     Tests that agent actions correctly increment the operations_used counter.
     """
+    strategy = ExecCountStrategy()
+    agent_runtime = AgentRuntime(
+        agent_id=uuid4(),
+        authority=MagicMock(),
+        strategy=strategy,
+        clock=LogicalClock(),
+        transient_timeout_ticks=10
+    )
     cap_id = uuid4()
     cap = Capability(
         id=cap_id,
@@ -80,7 +85,7 @@ def test_operation_counting(agent_runtime):
     updated_cap = agent_runtime.cache.get(cap_id)
     assert updated_cap.operations_used == 1
 
-def test_revocation_received(agent_runtime, mock_strategy):
+def test_revocation_received(agent_runtime):
     """
     Tests that the agent runtime correctly handles a revocation event.
     """
@@ -94,10 +99,6 @@ def test_revocation_received(agent_runtime, mock_strategy):
     )
     agent_runtime.cache.update(cap)
 
-    # Mock the strategy to return an invalidated capability
-    invalidated_cap = Capability(**{**cap.to_dict(), "state": MESIState.INVALID})
-    mock_strategy.on_revoke.return_value = invalidated_cap
-
     # Send a revocation event
     revocation_event = RevocationEvent(
         capability_id=cap_id,
@@ -106,7 +107,6 @@ def test_revocation_received(agent_runtime, mock_strategy):
     )
     agent_runtime.on_revocation_received(revocation_event)
 
-    # Assert that the strategy was called and the cache was updated
-    mock_strategy.on_revoke.assert_called_once()
+    # Assert that the cache was updated
     updated_cap = agent_runtime.cache.get(cap_id)
     assert updated_cap.state == MESIState.INVALID

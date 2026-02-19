@@ -12,6 +12,7 @@ from src.core.types import (
 from src.authority.registry import CapabilityRegistry
 from src.authority.broadcaster import RevocationBroadcaster
 from src.authority.trust_scorer import TrustScorer
+from src.simulation.consistency import ConsistencyMonitor
 
 
 class AuthorityService:
@@ -21,11 +22,13 @@ class AuthorityService:
         broadcaster: RevocationBroadcaster,
         trust_scorer: TrustScorer,
         clock: LogicalClock,
+        monitor: ConsistencyMonitor,
     ):
         self.registry = registry
         self.broadcaster = broadcaster
         self.trust_scorer = trust_scorer
         self.clock = clock
+        self.monitor = monitor
 
     def grant_capability(
         self,
@@ -76,6 +79,7 @@ class AuthorityService:
             for descendant in descendants:
                 agents_to_notify.append(descendant.agent_id)
         
+        self.monitor.record_revocation_broadcast(event, set(agents_to_notify))
         self.broadcaster.broadcast(event, agents_to_notify)
         return event
 
@@ -111,6 +115,7 @@ class AuthorityService:
 
     def get_revocation_status(self, event_id: UUID) -> Dict:
         """Gets the propagation status of a revocation event."""
-        # TODO: Implement status tracking
-        pass
+        # This can now be implemented using the ConsistencyMonitor
+        pending_count = self.monitor.get_pending_ack_count(event_id)
+        return {"event_id": event_id, "pending_acks": pending_count}
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List
 
-from .base import RevocationStrategy
+from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
 from src.core.mesi import MESIState, TransientState
+from src.core.types import Capability
 
 if TYPE_CHECKING:
-    from agent.runtime import AgentRuntime
-    from core.types import Capability, RevocationEvent
+    from src.agent.runtime import AgentRuntime
+    from src.core.types import RevocationEvent, ActionRecord
 
 
 class LazyInvalidationStrategy(RevocationStrategy):
@@ -14,43 +15,46 @@ class LazyInvalidationStrategy(RevocationStrategy):
     Consistency-Directed. Agent checks with authority on a defined interval ("check-on-use").
     The authority does not push revocations; the agent pulls validity information.
     """
+    name: str = "lazy"
+    coherence_class: CoherenceClass = CoherenceClass.CONSISTENCY_DIRECTED
+    bound_type: BoundType = BoundType.TIME
+
     def __init__(self, check_interval_ticks: int = 100):
         self.check_interval_ticks = check_interval_ticks
+        self._metrics = StrategyMetrics()
 
-    def on_grant(self, agent: AgentRuntime, capability: Capability) -> Capability:
-        return capability
+    def initiate_revocation(self, event: "RevocationEvent", agents: List["AgentRuntime"]) -> None:
+        # In Lazy mode, the authority doesn't push revocations to agents.
+        # This method is part of the ABC but is a no-op for lazy strategy.
+        pass
 
-    def on_delegate(self, agent: AgentRuntime, parent_cap: Capability, child_cap: Capability) -> tuple[Capability, Capability]:
-        new_parent_data = parent_cap.to_dict()
-        new_parent_data["state"] = MESIState.MODIFIED
-        new_parent_cap = Capability(**new_parent_data)
-        return new_parent_cap, child_cap
-
-    def on_revoke(self, agent: AgentRuntime, event: RevocationEvent) -> Optional[Capability]:
-        # In Lazy mode, the agent doesn't process unsolicited revocations from the bus.
-        # It will discover the invalidation during its next on_action or on_tick check.
-        return None
-
-    def on_action(self, agent: AgentRuntime, capability: Capability) -> Capability:
+    def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """On action, check if the revalidation interval has passed."""
-        if agent.clock.now() - agent.state.last_sync_tick > self.check_interval_ticks:
+        if agent.clock.now() - agent.cache.state.last_sync_tick > self.check_interval_ticks:
             # Time to revalidate. Enter a transient state.
-            # The agent runtime will see this and issue a revalidation request.
-            new_cap_data = capability.to_dict()
-            new_cap_data["transient_state"] = TransientState.ISG # Invalid-to-Shared-waiting-Grant
-            new_cap_data["transient_entered_tick"] = agent.clock.now()
-            return Capability(**new_cap_data)
-        return capability
+            agent.cache.enter_transient_state(capability.id, TransientState.ISG)
+            return ActionResult.PENDING_VALIDATION
+        
+        if capability.state == MESIState.INVALID:
+            return ActionResult.DENIED
+            
+        return ActionResult.ALLOWED
 
-    def on_tick(self, agent: AgentRuntime, tick: int):
+    def on_tick(self, agent: "AgentRuntime", tick: int) -> None:
         """Periodically re-validate capabilities based on the interval."""
-        if tick - agent.state.last_sync_tick > self.check_interval_ticks:
-            for cap in agent.state.capabilities.values():
-                if cap.state == MESIState.INVALID:
-                    continue
-                # This is a simplified model. A real implementation would batch these.
-                new_cap_data = cap.to_dict()
-                new_cap_data["transient_state"] = TransientState.ISG
-                new_cap_data["transient_entered_tick"] = agent.clock.now()
-                agent.state.capabilities[cap.id] = Capability(**new_cap_data)
-            agent.state.last_sync_tick = tick
+        if tick - agent.cache.state.last_sync_tick > self.check_interval_ticks:
+            for cap_id in list(agent.cache.state.capabilities.keys()):
+                cap = agent.cache.get(cap_id)
+                if cap and cap.state != MESIState.INVALID:
+                    # This is a simplified model. A real implementation would batch these.
+                    agent.cache.enter_transient_state(cap.id, TransientState.ISG, tick)
+            agent.cache.state.last_sync_tick = tick
+
+    def record_action(self, agent: "AgentRuntime", capability: "Capability", action: "ActionRecord") -> None:
+        pass  # No specific recording logic for lazy
+
+    def get_metrics(self) -> "StrategyMetrics":
+        return self._metrics
+
+    def get_theoretical_bound(self) -> str:
+        return f"Staleness window is at most {self.check_interval_ticks} ticks."

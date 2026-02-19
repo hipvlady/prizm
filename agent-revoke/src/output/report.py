@@ -14,7 +14,7 @@ def generate_html_report(metrics, template_dir="src/output/templates"):
         unauthorized_ops=metrics.unauthorized_actions_count,
         p50_latency=metrics.revocation_latency_p50,
         p99_latency=metrics.revocation_latency_p99,
-        convergence_time=metrics.convergence_time_ticks,
+        convergence_time=metrics.convergence_time,
     )
     return html_content
 

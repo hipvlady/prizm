@@ -23,11 +23,14 @@ class BoundType(Enum):
 
 class ActionResult(Enum):
     ALLOWED = "allowed"
-    DENIED = "denied"
+    DENIED_INVALID = "denied_invalid"
+    DENIED_TRANSIENT = "denied_transient"
+    DENIED_SCOPE = "denied_scope"
+    DENIED_GENERIC = "denied"
     PENDING_VALIDATION = "pending_validation"
-    EXHAUSTED = "exhausted"       # max_operations reached (RCC release)
-    EXPIRED = "expired"           # TTL elapsed (temporal coherence self-invalidation)
-    TIMEOUT = "timeout"           # transient state timed out (ADR-005)
+    EXHAUSTED = "exhausted"
+    EXPIRED = "expired"
+    TIMEOUT = "timeout"
 
 
 @dataclass
