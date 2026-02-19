@@ -1,8 +1,10 @@
 import pytest
 import os
+import subprocess
+import sys
 from src.simulation.engine import SimulationEngine
 from src.simulation.scenarios import load_scenario
-from src.output.report import generate_html_report, save_report
+from src.output.report import generate_html_report, generate_strategy_comparison_report, save_report
 from src.simulation.metrics import SimulationMetrics
 
 @pytest.fixture(scope="module")
@@ -93,3 +95,64 @@ def test_html_report_generated(tmp_path, templates_path):
         assert "test_strategy" in content
         assert "Unauthorized Operations" in content
         assert "10" in content
+
+
+def test_html_comparison_report_generated(tmp_path, templates_path):
+    eager = SimulationMetrics(
+        scenario="crm-bulk-ops",
+        strategy="eager",
+        total_ticks=100,
+        total_actions=1000,
+        unauthorized_actions_count=1,
+        unauthorized_actions_by_depth={0: 0, 1: 0, 2: 1},
+        staleness_window_max=1,
+    )
+    exec_count = SimulationMetrics(
+        scenario="crm-bulk-ops",
+        strategy="exec_count",
+        total_ticks=100,
+        total_actions=1000,
+        unauthorized_actions_count=50,
+        unauthorized_actions_by_depth={0: 5, 1: 20, 2: 25},
+        staleness_window_max=50,
+    )
+
+    html = generate_strategy_comparison_report([eager, exec_count], template_dir=templates_path)
+    report_path = tmp_path / "comparison_report.html"
+    save_report(html, report_path)
+
+    with open(report_path, "r") as f:
+        content = f.read()
+        assert "Strategy Comparison" in content
+        assert "Cascade Depth Analysis" in content
+        assert "Clock Dependence" in content
+        assert "eager" in content
+        assert "exec_count" in content
+
+
+def test_run_strategy_comparison_script(tmp_path, scenarios_path):
+    scenario_file = os.path.join(scenarios_path, "crm-bulk-ops.yaml")
+    report_path = tmp_path / "crm-comparison.html"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_strategy_comparison.py",
+            "--scenario",
+            scenario_file,
+            "--output",
+            str(report_path),
+        ],
+        cwd=os.path.join(os.path.dirname(__file__), ".."),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert report_path.exists()
+    content = report_path.read_text()
+    assert "Strategy Comparison" in content
+    assert "scenarios/crm-bulk-ops.yaml" in content
+    assert "exec_count" in content
+    assert "lease" in content
+    assert "Report:" in result.stdout

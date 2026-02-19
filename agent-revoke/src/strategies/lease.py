@@ -1,5 +1,8 @@
+# Copyright (c) 2026 Prizm contributors.
+"""Lease-based temporal coherence revocation strategy."""
+
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
 from src.core.mesi import MESIState
@@ -32,7 +35,7 @@ class LeaseBasedStrategy(RevocationStrategy):
     def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """Check for expiration before use."""
         if capability.state == MESIState.INVALID:
-            return ActionResult.DENIED
+            return ActionResult.DENIED_INVALID
 
         if capability.expires_tick is not None and agent.clock.now() >= capability.expires_tick:
             agent.invalidate_capability(capability.id)
@@ -53,7 +56,10 @@ class LeaseBasedStrategy(RevocationStrategy):
         """
         Requests a new capability from the authority after the old one has expired.
         """
-        # The capability is already marked as INVALID by validate_action
+        status = agent.authority.check_capability(agent.agent_id, capability.resource)
+        if not status.get("valid", False):
+            return None
+
         new_cap = agent.authority.grant_capability(
             agent_id=agent.agent_id,
             resource=capability.resource,

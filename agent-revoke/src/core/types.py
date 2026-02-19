@@ -1,27 +1,33 @@
+# Copyright (c) 2026 Prizm contributors.
+"""Core dataclasses and enums shared across simulation modules."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
-from .mesi import MESIState, TransientState
 from ..strategies.base import ActionResult
+from .mesi import MESIState, TransientState
 
 
 class RevocationReason(Enum):
-    """The reason for a capability's invalidation."""
+    """Reason for capability invalidation."""
+
     EXPLICIT = "explicit"
     EXPIRED = "expired"
     EXHAUSTED = "exhausted"
     PARENT_REVOKED = "parent_revoked"
     TRUST_VIOLATION = "trust_violation"
     COMPROMISED = "compromised"
-    TIMEOUT_FAILSAFE = "transient_state_timeout"  # ADR-005
+    TIMEOUT_FAILSAFE = "transient_state_timeout"
     REVALIDATING = "revalidating"
 
 
 class ScopeAttenuationError(Exception):
-    """Raised when a delegation attempt violates the scope attenuation invariant."""
+    """Raised when delegated scope is broader than parent scope."""
+
     def __init__(self, child_scope: tuple[str, ...], parent_scope: tuple[str, ...]):
         super().__init__(f"Child scope {child_scope} must be a subset of parent scope {parent_scope}")
         self.child_scope = child_scope
@@ -29,16 +35,13 @@ class ScopeAttenuationError(Exception):
 
 
 class CapabilityExhaustedError(Exception):
-    """Raised when an agent attempts to use a capability that has been exhausted (e.g., max_operations)."""
-    pass
+    """Raised when operation budget is exhausted."""
 
 
 @dataclass(frozen=True)
 class Capability:
-    """
-    A capability held by an agent, modeled as a cache line in a coherence protocol.
-    This object is immutable (`frozen=True`); state changes result in a new instance.
-    """
+    """Immutable capability model used as coherence cache line analogue."""
+
     agent_id: UUID
     resource: str
     state: MESIState
@@ -57,14 +60,21 @@ class Capability:
     delegation_depth: int = 0
 
     def to_dict(self) -> dict:
-        """Helper to convert dataclass to dict for creating new instances."""
+        """Serialise capability to mutable dictionary for state updates."""
         return {
-            "id": self.id, "agent_id": self.agent_id, "resource": self.resource,
-            "state": self.state, "granted_tick": self.granted_tick,
-            "expires_tick": self.expires_tick, "max_operations": self.max_operations,
-            "operations_used": self.operations_used, "delegator_id": self.delegator_id,
-            "parent_cap_id": self.parent_cap_id, "scope": self.scope,
-            "trust_score": self.trust_score, "version": self.version,
+            "id": self.id,
+            "agent_id": self.agent_id,
+            "resource": self.resource,
+            "state": self.state,
+            "granted_tick": self.granted_tick,
+            "expires_tick": self.expires_tick,
+            "max_operations": self.max_operations,
+            "operations_used": self.operations_used,
+            "delegator_id": self.delegator_id,
+            "parent_cap_id": self.parent_cap_id,
+            "scope": self.scope,
+            "trust_score": self.trust_score,
+            "version": self.version,
             "transient_state": self.transient_state,
             "transient_entered_tick": self.transient_entered_tick,
             "delegation_depth": self.delegation_depth,
@@ -73,7 +83,8 @@ class Capability:
 
 @dataclass(frozen=True)
 class RevocationEvent:
-    """An event representing the revocation of a capability, sent from PDP to PEP."""
+    """Revocation event propagated from PDP to PEP."""
+
     capability_id: UUID
     reason: RevocationReason
     issued_tick: int
@@ -84,7 +95,8 @@ class RevocationEvent:
 
 @dataclass(frozen=True)
 class ActionRecord:
-    """A record of an action attempted by an agent."""
+    """Recorded action attempt with authorisation outcome."""
+
     agent_id: UUID
     capability_id: Optional[UUID]
     resource: str
@@ -96,7 +108,8 @@ class ActionRecord:
 
 @dataclass
 class AgentState:
-    """The complete state of a single agent, managed by the AgentRuntime."""
+    """Mutable aggregate state for one runtime agent."""
+
     agent_id: UUID
     capabilities: Dict[UUID, Capability] = field(default_factory=dict)
     trust_score: float = 1.0

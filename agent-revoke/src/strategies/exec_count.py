@@ -1,5 +1,8 @@
+# Copyright (c) 2026 Prizm contributors.
+"""Execution-count (RCC-like) revocation strategy."""
+
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
 from src.core.mesi import MESIState, TransientState
@@ -34,7 +37,7 @@ class ExecCountStrategy(RevocationStrategy):
         If the operation count is exhausted, the capability must be re-acquired.
         """
         if capability.state == MESIState.INVALID:
-            return ActionResult.DENIED
+            return ActionResult.DENIED_INVALID
 
         # The check is `operations_used < max_operations`.
         # When `operations_used == max_operations`, it's exhausted.
@@ -56,6 +59,9 @@ class ExecCountStrategy(RevocationStrategy):
         Invalidates the exhausted capability and requests a new one from the authority.
         """
         agent.invalidate_capability(capability.id)
+        status = agent.authority.check_capability(agent.agent_id, capability.resource)
+        if not status.get("valid", False):
+            return None
         new_cap = agent.authority.grant_capability(
             agent_id=agent.agent_id,
             resource=capability.resource,

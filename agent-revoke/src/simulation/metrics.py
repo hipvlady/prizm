@@ -1,23 +1,30 @@
-from dataclasses import dataclass, field
-from typing import List, Dict
+# Copyright (c) 2026 Prizm contributors.
+"""Metrics data structures and collection utilities."""
+
+from __future__ import annotations
+
 import statistics
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List
 
 from rich.table import Table
 
 from src.core.types import ActionRecord
 from src.simulation.consistency import ConsistencyMonitor
+from src.strategies.base import ActionResult
+
 
 @dataclass
 class SimulationMetrics:
+    """Immutable summary payload produced at the end of a simulation run."""
+
     scenario: str
     strategy: str
     total_ticks: int
     total_actions: int
     unauthorized_actions_count: int
     unauthorized_actions_by_depth: Dict[int, int]
-    
-    # Newly added metrics from spec §2.4
     revocation_latency_p50: float = 0.0
     revocation_latency_p99: float = 0.0
     staleness_window_max: int = 0
@@ -30,8 +37,12 @@ class SimulationMetrics:
     message_overhead: int = 0
     revalidation_count: int = 0
     operations_wasted_on_revalidation: int = 0
+    wall_time_seconds: float = 0.0
+    avg_tick_seconds: float = 0.0
+    p95_tick_seconds: float = 0.0
 
     def summary_table(self) -> str:
+        """Render a Rich table for terminal output."""
         table = Table(title=f"Metrics for {self.scenario} with {self.strategy} strategy")
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="magenta")
@@ -46,17 +57,23 @@ class SimulationMetrics:
         table.add_row("Transient State Timeouts", str(self.transient_state_timeouts))
         table.add_row("Message Overhead", str(self.message_overhead))
         table.add_row("Revalidations", str(self.revalidation_count))
+        table.add_row("Wall Time (s)", f"{self.wall_time_seconds:.6f}")
+        table.add_row("Avg Tick Time (s)", f"{self.avg_tick_seconds:.6f}")
 
         for depth, count in sorted(self.unauthorized_actions_by_depth.items()):
             table.add_row(f"  Unauthorized at Depth {depth}", str(count))
-        
+
         from rich.console import Console
+
         console = Console()
         with console.capture() as capture:
             console.print(table)
         return capture.get()
 
+
 class MetricsCollector:
+    """Collect and aggregate simulation metrics."""
+
     def __init__(self):
         self._actions: List[ActionRecord] = []
         self._unauthorized_actions: List[ActionRecord] = []
@@ -65,39 +82,76 @@ class MetricsCollector:
         self._message_count: int = 0
         self._transient_state_timeouts: int = 0
         self._unauthorized_actions_in_transient: int = 0
+        self._tick_durations: List[float] = []
 
     def record_action(self, record: ActionRecord):
+        """Record an action event."""
         self._actions.append(record)
 
     def record_unauthorized_action(self, record: ActionRecord) -> None:
+        """Record an action that was authorised locally but stale globally."""
         self._unauthorized_actions.append(record)
         self._unauthorized_actions_by_depth[record.delegation_depth] += 1
         if record.result == ActionResult.DENIED_TRANSIENT:
             self._unauthorized_actions_in_transient += 1
 
     def record_revalidation(self):
+        """Increment revalidation counter."""
         self._revalidation_count += 1
-    
+
     def record_message_broadcast(self, recipient_count: int):
+        """Record broadcast overhead as recipient fanout count."""
         self._message_count += recipient_count
 
     def record_transient_timeout(self):
+        """Record transient timeout fail-safe activation."""
         self._transient_state_timeouts += 1
 
-    def finalize(self, scenario: str, strategy: str, total_ticks: int, monitor: ConsistencyMonitor) -> SimulationMetrics:
-        
+    def record_tick_duration(self, seconds: float):
+        """Record wall-clock duration of one simulation tick."""
+        self._tick_durations.append(seconds)
+
+    def finalize(
+        self,
+        scenario: str,
+        strategy: str,
+        total_ticks: int,
+        monitor: ConsistencyMonitor,
+        wall_time_seconds: float = 0.0,
+    ) -> SimulationMetrics:
+        """Create final metrics payload.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario label.
+        strategy : str
+            Strategy label.
+        total_ticks : int
+            Number of ticks executed.
+        monitor : ConsistencyMonitor
+            Monitor providing convergence and staleness data.
+        wall_time_seconds : float, optional
+            End-to-end runtime measured via ``time.perf_counter``.
+        """
         latencies = monitor.get_convergence_latencies()
         p50 = 0.0
         p99 = 0.0
         avg_convergence = 0.0
         if latencies:
-            # Ensure there are enough data points for quantiles
             if len(latencies) > 1:
                 p50 = statistics.quantiles(latencies, n=100)[49]
                 p99 = statistics.quantiles(latencies, n=100)[98]
-            elif len(latencies) == 1:
+            else:
                 p50 = p99 = latencies[0]
             avg_convergence = statistics.mean(latencies)
+
+        avg_tick_seconds = statistics.mean(self._tick_durations) if self._tick_durations else 0.0
+        p95_tick_seconds = (
+            statistics.quantiles(self._tick_durations, n=100)[94]
+            if len(self._tick_durations) > 1
+            else (self._tick_durations[0] if self._tick_durations else 0.0)
+        )
 
         return SimulationMetrics(
             scenario=scenario,
@@ -113,5 +167,8 @@ class MetricsCollector:
             convergence_time=avg_convergence,
             transient_state_timeouts=self._transient_state_timeouts,
             unauthorized_actions_in_transient=self._unauthorized_actions_in_transient,
+            staleness_window_max=monitor.get_staleness_window_max(),
+            wall_time_seconds=wall_time_seconds,
+            avg_tick_seconds=avg_tick_seconds,
+            p95_tick_seconds=p95_tick_seconds,
         )
-

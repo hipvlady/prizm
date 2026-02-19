@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Prizm contributors.
+"""Lazy consistency-directed revocation strategy."""
+
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
@@ -32,11 +35,11 @@ class LazyInvalidationStrategy(RevocationStrategy):
         """On action, check if the revalidation interval has passed."""
         if agent.clock.now() - agent.cache.state.last_sync_tick > self.check_interval_ticks:
             # Time to revalidate. Enter a transient state.
-            agent.cache.enter_transient_state(capability.id, TransientState.ISG)
+            agent.cache.enter_transient_state(capability.id, TransientState.ISG, agent.clock.now())
             return ActionResult.PENDING_VALIDATION
         
         if capability.state == MESIState.INVALID:
-            return ActionResult.DENIED
+            return ActionResult.DENIED_INVALID
             
         return ActionResult.ALLOWED
 
@@ -46,8 +49,12 @@ class LazyInvalidationStrategy(RevocationStrategy):
             for cap_id in list(agent.cache.state.capabilities.keys()):
                 cap = agent.cache.get(cap_id)
                 if cap and cap.state != MESIState.INVALID:
-                    # This is a simplified model. A real implementation would batch these.
                     agent.cache.enter_transient_state(cap.id, TransientState.ISG, tick)
+                    status = agent.authority.check_capability(agent.agent_id, cap.resource)
+                    if status.get("valid", False):
+                        agent.cache.clear_transient_state(cap.id)
+                    else:
+                        agent.invalidate_capability(cap.id)
             agent.cache.state.last_sync_tick = tick
 
     def record_action(self, agent: "AgentRuntime", capability: "Capability", action: "ActionRecord") -> None:

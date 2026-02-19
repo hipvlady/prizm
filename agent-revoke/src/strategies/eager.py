@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Prizm contributors.
+"""Eager consistency-agnostic revocation strategy."""
+
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
@@ -39,7 +42,7 @@ class EagerInvalidationStrategy(RevocationStrategy):
     def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """In Eager mode, if a capability exists and is not Invalid, it's good to go."""
         if capability.state == MESIState.INVALID:
-            return ActionResult.DENIED
+            return ActionResult.DENIED_INVALID
         return ActionResult.ALLOWED
 
     def on_tick(self, agent: "AgentRuntime", tick: int) -> None:

@@ -4,23 +4,24 @@
 # Key Metric: unauthorized_actions_count
 
 simulation:
-  duration_ticks: 500
-  agents: 5
-  action_probability: 0.9 # High velocity
+  duration_ticks: 120
+  agents: 1
+  actions_per_tick: 100 # Deterministic high velocity workload
+  seed: 42
   latency_ticks: 5
   transient_timeout_ticks: 100
 
 scenario:
   name: "CRM High-Velocity Agent"
-  delegation_depth: 0 # A single, powerful agent
+  delegation_depth: 1 # Single powerful agent
   cascade_revocation: false
-  revocation_trigger_tick: 50 # Revoke early to observe behavior
+  revocation_trigger_tick: 0 # Revoke immediately to measure bounded post-revoke damage
 
 strategies:
   lazy:
-    check_interval_ticks: 100 # Large interval to show high number of unauthorized actions
+    check_interval_ticks: 23 # Approx. 2300 unauthorized ops at 100 ops/tick
   lease:
-    default_ttl_ticks: 600 # Represents a 60-second TTL
+    default_ttl_ticks: 60 # 60-tick TTL => ~6000 unauthorized ops at 100 ops/tick
   exec_count:
     max_operations: 50 # The key bound for this scenario
 

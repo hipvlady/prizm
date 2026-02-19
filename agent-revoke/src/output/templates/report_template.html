@@ -4,76 +4,141 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simulation Report: {{ scenario }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 2em; }
-        h1, h2 { color: #333; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        main { padding: 1rem 0; }
     </style>
 </head>
 <body>
-    <h1>Simulation Report: {{ scenario }}</h1>
-    <h2>Strategy: {{ strategy }}</h2>
-    
-    <table>
-        <tr>
-            <th>Metric</th>
-            <th>Value</th>
-        </tr>
-        <tr>
-            <td>Unauthorized Operations</td>
-            <td>{{ unauthorized_ops }}</td>
-        </tr>
-        <tr>
-            <td>P50 Revocation Latency (ticks)</td>
-            <td>{{ p50_latency }}</td>
-        </tr>
-        <tr>
-            <td>P99 Revocation Latency (ticks)</td>
-            <td>{{ p99_latency }}</td>
-        </tr>
-        <tr>
-            <td>Convergence Time (ticks)</td>
-            <td>{{ convergence_time }}</td>
-        </tr>
-    </table>
-
-    <canvas id="metricsChart" width="400" height="200"></canvas>
-
-    <script>
-        const ctx = document.getElementById('metricsChart').getContext('2d');
-        const metricsChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Unauthorized Ops', 'P50 Latency', 'P99 Latency', 'Convergence Time'],
-                datasets: [{
-                    label: 'Metrics',
-                    data: [{{ unauthorized_ops }}, {{ p50_latency }}, {{ p99_latency }}, {{ convergence_time }}],
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.2)',
-                        'rgba(54, 162, 235, 0.2)',
-                        'rgba(255, 206, 86, 0.2)',
-                        'rgba(75, 192, 192, 0.2)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true
+    <main class="container">
+        <h1>Simulation Report: {{ scenario }}</h1>
+        <p><strong>Strategy:</strong> <code>{{ strategy }}</code></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Unauthorized Operations</td>
+                    <td>{{ unauthorized_ops }}</td>
+                </tr>
+                <tr>
+                    <td>P50 Revocation Latency (ticks)</td>
+                    <td>{{ p50_latency }}</td>
+                </tr>
+                <tr>
+                    <td>P99 Revocation Latency (ticks)</td>
+                    <td>{{ p99_latency }}</td>
+                </tr>
+                <tr>
+                    <td>Convergence Time (ticks)</td>
+                    <td>{{ convergence_time }}</td>
+                </tr>
+            </tbody>
+        </table>
+        <h3>Metrics Chart</h3>
+        <canvas id="metricsChart" width="400" height="200"></canvas>
+        {% if comparison_rows %}
+        <h3>Strategy Comparison</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Unauthorized</th>
+                    <th>P50</th>
+                    <th>P99</th>
+                    <th>Staleness Max</th>
+                    <th>Convergence</th>
+                    <th>Messages</th>
+                    <th>Revalidations</th>
+                    <th>Timeouts</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comparison_rows %}
+                <tr>
+                    <td>{{ row.strategy }}</td>
+                    <td>{{ row.unauthorized }}</td>
+                    <td>{{ row.p50 }}</td>
+                    <td>{{ row.p99 }}</td>
+                    <td>{{ row.staleness_max }}</td>
+                    <td>{{ row.convergence }}</td>
+                    <td>{{ row.message_overhead }}</td>
+                    <td>{{ row.revalidations }}</td>
+                    <td>{{ row.timeouts }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if depth_rows %}
+        <h3>Cascade Depth Analysis</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Depth</th>
+                    {% for label in chart_labels %}
+                    <th>{{ label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in depth_rows %}
+                <tr>
+                    <td>{{ row.depth }}</td>
+                    {% for label in chart_labels %}
+                    <td>{{ row.counts.get(label, 0) }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if clock_rows %}
+        <h3>Clock Dependence</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Clock-Dependent?</th>
+                    <th>Robustness</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in clock_rows %}
+                <tr>
+                    <td>{{ row.strategy }}</td>
+                    <td>{{ row.clock_dependent }}</td>
+                    <td>{{ row.robustness }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <script>
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: {{ chart_labels | tojson }},
+                    datasets: [{
+                        label: 'Metrics',
+                        data: {{ chart_values | tojson }}
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
                     }
                 }
-            }
-        });
-    </script>
+            });
+        </script>
+    </main>
 </body>
 </html>

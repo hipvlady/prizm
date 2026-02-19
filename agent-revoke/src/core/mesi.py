@@ -1,24 +1,24 @@
+# Copyright (c) 2026 Prizm contributors.
+"""MESI stable and transient states with transition validation."""
+
+from __future__ import annotations
+
 from enum import Enum
 from typing import Set, Tuple
 
 
 class MESIState(Enum):
-    """
-    Stable MESI states, formally mapping to capability states.
-    Source: Sorin, Hill, Wood — A Primer on Memory Consistency and Cache Coherence (2nd ed.), Ch. 6.4.1
-    """
-    MODIFIED = "Modified"       # Valid, exclusive, owned, dirty. The agent has delegated this capability, making the authority's copy stale. Only this agent's cache holds the current truth for its sub-tree.
-    EXCLUSIVE = "Exclusive"     # Valid, exclusive, clean. The agent is the sole holder of this capability.
-    SHARED = "Shared"           # Valid, not exclusive, clean. Multiple agents hold this capability.
-    INVALID = "Invalid"         # Not valid. The capability has been revoked, expired, exhausted, or timed out from a transient state.
+    """Stable MESI states for capability coherence."""
+
+    MODIFIED = "Modified"
+    EXCLUSIVE = "Exclusive"
+    SHARED = "Shared"
+    INVALID = "Invalid"
 
 
 class TransientState(Enum):
-    """
-    Transient MESI states, representing in-flight transitions.
-    Source: Primer, Ch. 6.4.1 (XYZ notation: from X, going to Y, waiting for Z).
-    Per ADR-005, all transient states are subject to a fail-safe timeout.
-    """
+    """Transient MESI states using XYZ transition notation."""
+
     ISG = "Invalid-to-Shared-waiting-Grant"
     IED = "Invalid-to-Exclusive-waiting-Delegation"
     EIA = "Exclusive-to-Invalid-waiting-Ack"
@@ -26,7 +26,7 @@ class TransientState(Enum):
     MIC = "Modified-to-Invalid-waiting-Cascade"
     MIA = "Modified-to-Invalid-waiting-Ack"
 
-# Valid state transitions for the MESI protocol
+
 VALID_TRANSITIONS: Set[Tuple[MESIState, MESIState]] = {
     (MESIState.INVALID, MESIState.SHARED),
     (MESIState.INVALID, MESIState.EXCLUSIVE),
@@ -39,8 +39,20 @@ VALID_TRANSITIONS: Set[Tuple[MESIState, MESIState]] = {
     (MESIState.MODIFIED, MESIState.SHARED),
 }
 
+
 def is_valid_transition(current_state: MESIState, next_state: MESIState) -> bool:
-    """
-    Checks if a transition between two MESI states is valid.
+    """Validate whether a stable-state transition is allowed.
+
+    Parameters
+    ----------
+    current_state : MESIState
+        Source stable state.
+    next_state : MESIState
+        Target stable state.
+
+    Returns
+    -------
+    bool
+        ``True`` when transition is valid.
     """
     return (current_state, next_state) in VALID_TRANSITIONS
