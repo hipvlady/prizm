@@ -93,6 +93,7 @@ class AgentRuntime:
             return
 
         ack_tick = self.clock.now() if tick is None else tick
+        event.propagated[self.agent_id] = ack_tick
         self.monitor.record_agent_ack(self.agent_id, event.id, ack_tick)
         self.invalidate_capability(event.capability_id)
         LOGGER.info(

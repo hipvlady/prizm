@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 
 from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
-from src.core.mesi import MESIState
+from src.core.mesi import MESIState, can_act_in_transient
 from src.core.types import Capability
 
 if TYPE_CHECKING:
@@ -34,6 +34,17 @@ class LeaseBasedStrategy(RevocationStrategy):
 
     def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """Check for expiration before use."""
+        lease_valid = capability.expires_tick is None or agent.clock.now() < capability.expires_tick
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+                lease_valid=lease_valid,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
+
         if capability.state == MESIState.INVALID:
             return ActionResult.DENIED_INVALID
 
@@ -75,3 +86,6 @@ class LeaseBasedStrategy(RevocationStrategy):
 
     def get_theoretical_bound(self) -> str:
         return f"Staleness is bounded by the lease TTL (default: {self.default_ttl_ticks} ticks)."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

@@ -28,12 +28,15 @@ class ConsistencyMonitor:
 
     def __init__(self):
         self._pending_events: Dict[UUID, MonitoredEvent] = {}
+        self._completed_events: Dict[UUID, MonitoredEvent] = {}
         self._convergence_latencies: List[int] = []
         self._stale_started: Dict[Tuple[UUID, UUID], int] = {}
         self._staleness_window_max: int = 0
 
     def record_revocation_broadcast(self, event: "RevocationEvent", agents_to_notify: Set[UUID]) -> None:
         """Register an event broadcast and expected recipients."""
+        for agent_id in agents_to_notify:
+            event.propagated.setdefault(agent_id, None)
         self._pending_events[event.id] = MonitoredEvent(event, agents_to_notify)
 
     def record_agent_ack(self, agent_id: UUID, event_id: UUID, current_tick: int) -> None:
@@ -44,6 +47,7 @@ class ConsistencyMonitor:
             if not monitored.agents_to_notify:
                 latency = current_tick - monitored.event.issued_tick
                 self._convergence_latencies.append(latency)
+                self._completed_events[event_id] = monitored
                 del self._pending_events[event_id]
 
     def get_convergence_latencies(self) -> List[int]:
@@ -99,6 +103,14 @@ class ConsistencyMonitor:
         if event_id in self._pending_events:
             return len(self._pending_events[event_id].agents_to_notify)
         return 0
+
+    def get_propagation_map(self, event_id: UUID) -> Dict[UUID, int | None]:
+        """Return propagation ACK timestamps for an event."""
+        if event_id in self._pending_events:
+            return dict(self._pending_events[event_id].event.propagated)
+        if event_id in self._completed_events:
+            return dict(self._completed_events[event_id].event.propagated)
+        return {}
 
     def get_staleness_window_max(self) -> int:
         """Return maximum observed staleness window in ticks."""

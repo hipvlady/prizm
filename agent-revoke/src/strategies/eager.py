@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List
 
 from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
 from src.core.types import Capability
-from src.core.mesi import MESIState
+from src.core.mesi import MESIState, can_act_in_transient
 
 if TYPE_CHECKING:
     from src.agent.runtime import AgentRuntime
@@ -41,6 +41,14 @@ class EagerInvalidationStrategy(RevocationStrategy):
 
     def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """In Eager mode, if a capability exists and is not Invalid, it's good to go."""
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
         if capability.state == MESIState.INVALID:
             return ActionResult.DENIED_INVALID
         return ActionResult.ALLOWED
@@ -56,3 +64,6 @@ class EagerInvalidationStrategy(RevocationStrategy):
 
     def get_theoretical_bound(self) -> str:
         return "Staleness is not possible under ideal conditions."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

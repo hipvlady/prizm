@@ -53,7 +53,7 @@ class Capability:
     delegator_id: Optional[UUID] = None
     parent_cap_id: Optional[UUID] = None
     scope: tuple[str, ...] = ()
-    trust_score: float = 1.0
+    trust_score: float = 0.8
     version: int = 0
     transient_state: Optional[TransientState] = None
     transient_entered_tick: Optional[int] = None
@@ -90,7 +90,7 @@ class RevocationEvent:
     issued_tick: int
     id: UUID = field(default_factory=uuid4)
     cascade: bool = False
-    propagate_to: List[UUID] = field(default_factory=list)
+    propagated: Dict[UUID, Optional[int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,7 @@ class AgentState:
 
     agent_id: UUID
     capabilities: Dict[UUID, Capability] = field(default_factory=dict)
-    trust_score: float = 1.0
+    trust_score: float = 0.8
     action_history: List[ActionRecord] = field(default_factory=list)
     last_sync_tick: int = 0
     heartbeat_tick: int = 0

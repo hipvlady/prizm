@@ -40,6 +40,15 @@ VALID_TRANSITIONS: Set[Tuple[MESIState, MESIState]] = {
 }
 
 
+class InvalidTransitionError(ValueError):
+    """Raised when an invalid stable-state transition is attempted."""
+
+    def __init__(self, current_state: MESIState, next_state: MESIState):
+        super().__init__(f"Invalid MESI transition: {current_state.value} -> {next_state.value}")
+        self.current_state = current_state
+        self.next_state = next_state
+
+
 def is_valid_transition(current_state: MESIState, next_state: MESIState) -> bool:
     """Validate whether a stable-state transition is allowed.
 
@@ -56,3 +65,59 @@ def is_valid_transition(current_state: MESIState, next_state: MESIState) -> bool
         ``True`` when transition is valid.
     """
     return (current_state, next_state) in VALID_TRANSITIONS
+
+
+def transition_state(current_state: MESIState, next_state: MESIState) -> MESIState:
+    """Validate and perform a stable MESI transition.
+
+    Raises
+    ------
+    InvalidTransitionError
+        If transition is not part of ``VALID_TRANSITIONS``.
+    """
+    if not is_valid_transition(current_state, next_state):
+        raise InvalidTransitionError(current_state, next_state)
+    return next_state
+
+
+def can_act_in_transient(
+    transient_state: TransientState,
+    strategy_name: str,
+    is_write: bool,
+    *,
+    lease_valid: bool = True,
+    ops_remaining: bool = True,
+) -> bool:
+    """Evaluate whether an action is permitted in a transient state.
+
+    Parameters
+    ----------
+    transient_state : TransientState
+        Current transient state.
+    strategy_name : str
+        Strategy identifier (`eager`, `lazy`, `lease`, `exec_count`).
+    is_write : bool
+        Whether the action is a write operation.
+    lease_valid : bool, optional
+        Lease validity signal for lease strategy.
+    ops_remaining : bool, optional
+        Operation budget signal for exec-count strategy.
+    """
+    if transient_state in {TransientState.ISG, TransientState.IED}:
+        return False
+
+    if transient_state in {TransientState.EIA, TransientState.SIA}:
+        if strategy_name == "eager":
+            return False
+        if strategy_name == "lazy":
+            return True
+        if strategy_name == "lease":
+            return lease_valid
+        if strategy_name == "exec_count":
+            return ops_remaining
+        return False
+
+    if transient_state in {TransientState.MIC, TransientState.MIA}:
+        return not is_write
+
+    return False

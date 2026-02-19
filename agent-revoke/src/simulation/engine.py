@@ -23,6 +23,7 @@ from src.core.clock import LogicalClock
 from src.core.exceptions import StaleCredentialError
 from src.core.logging_utils import configure_logging, get_logger
 from src.core.types import MESIState, RevocationReason
+from src.output.terminal import SimulationLiveView
 from src.simulation.consistency import ConsistencyMonitor
 from src.simulation.metrics import MetricsCollector
 from src.strategies.base import RevocationStrategy
@@ -58,11 +59,24 @@ class SimulationEngine:
         self.consistency_monitor = ConsistencyMonitor()
         self.metrics_collector = MetricsCollector()
         self.message_bus = deque()
+        self.live_view = SimulationLiveView(
+            enabled=bool(self.config["simulation"].get("live_output", False))
+        )
 
         latency_ticks = self.config["simulation"].get("latency_ticks", 1)
+        network_cfg = self.config.get("network", {})
+        message_loss_rate = self.config["simulation"].get(
+            "message_loss_rate",
+            network_cfg.get("message_loss_rate", 0.0),
+        )
         registry = CapabilityRegistry()
         broadcaster = RevocationBroadcaster(
-            self.message_bus, latency_ticks, self.clock, self.metrics_collector
+            self.message_bus,
+            latency_ticks,
+            self.clock,
+            self.metrics_collector,
+            message_loss_rate=message_loss_rate,
+            rng=self.rng,
         )
         trust_scorer = TrustScorer()
         self.authority = AuthorityService(
@@ -109,16 +123,21 @@ class SimulationEngine:
             self.scenario_name,
             self.strategy_name,
         )
+        self.live_view.start()
 
         duration_ticks = self.config["simulation"]["duration_ticks"]
         run_started = perf_counter()
-        for _ in range(duration_ticks):
-            current_tick = self.clock.now()
-            tick_started = perf_counter()
-            self._tick(current_tick)
-            tick_elapsed = perf_counter() - tick_started
-            self.metrics_collector.record_tick_duration(tick_elapsed)
-            self.clock.advance()
+        try:
+            for _ in range(duration_ticks):
+                current_tick = self.clock.now()
+                tick_started = perf_counter()
+                self._tick(current_tick)
+                tick_elapsed = perf_counter() - tick_started
+                self.metrics_collector.record_tick_duration(tick_elapsed)
+                self.live_view.update(current_tick, self.strategy_name, self.agents)
+                self.clock.advance()
+        finally:
+            self.live_view.stop()
         run_elapsed = perf_counter() - run_started
 
         LOGGER.info(
@@ -146,10 +165,10 @@ class SimulationEngine:
 
     def _process_message_bus(self, tick: int) -> None:
         """Deliver due revocation messages for current tick."""
-        for _ in range(len(self.message_bus)):
-            if self.message_bus and self.message_bus[0]["deliver_at"] <= tick:
-                msg = self.message_bus.popleft()
-                self.agents[msg["recipient"]].on_revocation_received(msg["event"], tick)
+        ready = [msg for msg in self.message_bus if msg["deliver_at"] <= tick]
+        for msg in ready:
+            self.message_bus.remove(msg)
+            self.agents[msg["recipient"]].on_revocation_received(msg["event"], tick)
 
     def _run_agent_maintenance(self, tick: int) -> None:
         """Run per-agent timeout and strategy tick handlers."""

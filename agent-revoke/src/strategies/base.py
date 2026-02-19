@@ -88,6 +88,10 @@ class RevocationStrategy(ABC):
     def get_theoretical_bound(self) -> str:
         """Return human-readable staleness bound description."""
 
+    @abstractmethod
+    def get_transient_state_duration(self) -> dict[str, float]:
+        """Return observed transient-state durations."""
+
     @property
     def is_clock_dependent(self) -> bool:
         """Return whether strategy depends on synchronised clocks."""

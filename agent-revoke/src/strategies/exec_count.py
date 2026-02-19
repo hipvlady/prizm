@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 
 from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
-from src.core.mesi import MESIState, TransientState
+from src.core.mesi import MESIState, TransientState, can_act_in_transient
 from src.core.types import Capability
 
 if TYPE_CHECKING:
@@ -36,6 +36,19 @@ class ExecCountStrategy(RevocationStrategy):
         This is the "release" part of the RCC cycle.
         If the operation count is exhausted, the capability must be re-acquired.
         """
+        ops_remaining = (
+            capability.max_operations is None or capability.operations_used < capability.max_operations
+        )
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+                ops_remaining=ops_remaining,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
+
         if capability.state == MESIState.INVALID:
             return ActionResult.DENIED_INVALID
 
@@ -77,3 +90,6 @@ class ExecCountStrategy(RevocationStrategy):
 
     def get_theoretical_bound(self) -> str:
         return f"Staleness is bounded by a maximum of {self.max_operations} operations."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

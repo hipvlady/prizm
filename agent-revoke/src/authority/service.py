@@ -305,4 +305,8 @@ class AuthorityService:
             Event status payload.
         """
         pending_count = self.monitor.get_pending_ack_count(event_id)
-        return {"event_id": event_id, "pending_acks": pending_count}
+        return {
+            "event_id": event_id,
+            "pending_acks": pending_count,
+            "propagated": self.monitor.get_propagation_map(event_id),
+        }

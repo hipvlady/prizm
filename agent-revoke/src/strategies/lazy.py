@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
-from src.core.mesi import MESIState, TransientState
+from src.core.mesi import MESIState, TransientState, can_act_in_transient
 from src.core.types import Capability
 
 if TYPE_CHECKING:
@@ -33,6 +33,15 @@ class LazyInvalidationStrategy(RevocationStrategy):
 
     def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
         """On action, check if the revalidation interval has passed."""
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
+
         if agent.clock.now() - agent.cache.state.last_sync_tick > self.check_interval_ticks:
             # Time to revalidate. Enter a transient state.
             agent.cache.enter_transient_state(capability.id, TransientState.ISG, agent.clock.now())
@@ -65,3 +74,6 @@ class LazyInvalidationStrategy(RevocationStrategy):
 
     def get_theoretical_bound(self) -> str:
         return f"Staleness window is at most {self.check_interval_ticks} ticks."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

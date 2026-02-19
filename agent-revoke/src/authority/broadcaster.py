@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections import deque
+import random
 from typing import List
 from uuid import UUID
 
@@ -21,11 +22,15 @@ class RevocationBroadcaster:
         latency_ticks: int,
         clock: LogicalClock,
         metrics_collector: MetricsCollector | None = None,
+        message_loss_rate: float = 0.0,
+        rng: random.Random | None = None,
     ):
         self.message_bus = message_bus
         self.latency_ticks = latency_ticks
         self.clock = clock
         self.metrics_collector = metrics_collector
+        self.message_loss_rate = message_loss_rate
+        self.rng = rng if rng is not None else random.Random()
 
     def broadcast(self, event: RevocationEvent, agent_ids: List[UUID]) -> None:
         """Broadcast revocation event to recipients.
@@ -40,6 +45,8 @@ class RevocationBroadcaster:
         if self.metrics_collector is not None:
             self.metrics_collector.record_message_broadcast(len(agent_ids))
         for agent_id in agent_ids:
+            if self.message_loss_rate > 0.0 and self.rng.random() < self.message_loss_rate:
+                continue
             self.message_bus.append(
                 {
                     "recipient": agent_id,
