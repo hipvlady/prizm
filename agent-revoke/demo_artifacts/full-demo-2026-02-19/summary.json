@@ -1,0 +1,214 @@
+{
+  "scenarios/banking-cascade.yaml": [
+    {
+      "strategy": "eager",
+      "unauthorized_actions": 17,
+      "unauthorized_by_depth": {
+        "0": 7,
+        "1": 6,
+        "2": 4
+      },
+      "staleness_window_max": 10,
+      "revocation_latency_p50": 10,
+      "revocation_latency_p99": 10,
+      "convergence_time": 10,
+      "message_overhead": 3,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 1.0,
+      "bound_violations_by_depth": {
+        "0": 2
+      },
+      "wall_time_seconds": 0.05289819900644943
+    },
+    {
+      "strategy": "lazy",
+      "unauthorized_actions": 17,
+      "unauthorized_by_depth": {
+        "0": 7,
+        "1": 6,
+        "2": 4
+      },
+      "staleness_window_max": 10,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 3,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.05759163698530756
+    },
+    {
+      "strategy": "lease",
+      "unauthorized_actions": 136,
+      "unauthorized_by_depth": {
+        "0": 54,
+        "1": 40,
+        "2": 42
+      },
+      "staleness_window_max": 99,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 3,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.11336708799353801
+    },
+    {
+      "strategy": "exec_count",
+      "unauthorized_actions": 129,
+      "unauthorized_by_depth": {
+        "0": 47,
+        "1": 40,
+        "2": 42
+      },
+      "staleness_window_max": 99,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 3,
+      "revalidation_count": 1,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.04884682400734164
+    }
+  ],
+  "scenarios/crm-bulk-ops.yaml": [
+    {
+      "strategy": "eager",
+      "unauthorized_actions": 500,
+      "unauthorized_by_depth": {
+        "0": 500
+      },
+      "staleness_window_max": 5,
+      "revocation_latency_p50": 5.0,
+      "revocation_latency_p99": 5.0,
+      "convergence_time": 5,
+      "message_overhead": 6,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.16666666666666666,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 1.1871031330083497
+    },
+    {
+      "strategy": "lazy",
+      "unauthorized_actions": 2400,
+      "unauthorized_by_depth": {
+        "0": 2400
+      },
+      "staleness_window_max": 24,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 25,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 1.2040356379875448
+    },
+    {
+      "strategy": "lease",
+      "unauthorized_actions": 6000,
+      "unauthorized_by_depth": {
+        "0": 6000
+      },
+      "staleness_window_max": 60,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 61,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 1.6794175260001794
+    },
+    {
+      "strategy": "exec_count",
+      "unauthorized_actions": 50,
+      "unauthorized_by_depth": {
+        "0": 50
+      },
+      "staleness_window_max": 0,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 1,
+      "revalidation_count": 1,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 1.0972031939891167
+    }
+  ],
+  "scenarios/anomaly-autorevoke.yaml": [
+    {
+      "strategy": "eager",
+      "unauthorized_actions": 0,
+      "unauthorized_by_depth": {},
+      "staleness_window_max": 0,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 0,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.005982744012726471
+    },
+    {
+      "strategy": "lazy",
+      "unauthorized_actions": 0,
+      "unauthorized_by_depth": {},
+      "staleness_window_max": 0,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 0,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.007633419008925557
+    },
+    {
+      "strategy": "lease",
+      "unauthorized_actions": 0,
+      "unauthorized_by_depth": {},
+      "staleness_window_max": 0,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 0,
+      "revalidation_count": 0,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.006890485994517803
+    },
+    {
+      "strategy": "exec_count",
+      "unauthorized_actions": 0,
+      "unauthorized_by_depth": {},
+      "staleness_window_max": 0,
+      "revocation_latency_p50": 0.0,
+      "revocation_latency_p99": 0.0,
+      "convergence_time": 0.0,
+      "message_overhead": 0,
+      "revalidation_count": 1,
+      "transient_state_timeouts": 0,
+      "cascade_completeness_ratio": 0.0,
+      "bound_violations_by_depth": {},
+      "wall_time_seconds": 0.009788542025489733
+    }
+  ]
+}

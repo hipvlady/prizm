@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Report: scenarios/anomaly-autorevoke.yaml</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        main { padding: 1rem 0; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Simulation Report: scenarios/anomaly-autorevoke.yaml</h1>
+        <p><strong>Strategy:</strong> <code>comparison</code></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Unauthorized Operations</td>
+                    <td>0</td>
+                </tr>
+                <tr>
+                    <td>P50 Revocation Latency (ticks)</td>
+                    <td>0</td>
+                </tr>
+                <tr>
+                    <td>P99 Revocation Latency (ticks)</td>
+                    <td>0</td>
+                </tr>
+                <tr>
+                    <td>Convergence Time (ticks)</td>
+                    <td>0</td>
+                </tr>
+            </tbody>
+        </table>
+        <h3>Metrics Chart</h3>
+        <canvas id="metricsChart" width="400" height="200"></canvas>
+        
+        <h3>Strategy Comparison</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Unauthorized</th>
+                    <th>P50</th>
+                    <th>P99</th>
+                    <th>Staleness Max</th>
+                    <th>Convergence</th>
+                    <th>Messages</th>
+                    <th>Revalidations</th>
+                    <th>Timeouts</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>eager</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>0</td>
+                </tr>
+                
+                <tr>
+                    <td>lazy</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>0</td>
+                </tr>
+                
+                <tr>
+                    <td>lease</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>0</td>
+                </tr>
+                
+                <tr>
+                    <td>exec_count</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>0.0</td>
+                    <td>0</td>
+                    <td>1</td>
+                    <td>0</td>
+                </tr>
+                
+            </tbody>
+        </table>
+        
+        
+        
+        <h3>Clock Dependence</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Clock-Dependent?</th>
+                    <th>Robustness</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>eager</td>
+                    <td>No</td>
+                    <td>High</td>
+                </tr>
+                
+                <tr>
+                    <td>lazy</td>
+                    <td>No</td>
+                    <td>High</td>
+                </tr>
+                
+                <tr>
+                    <td>lease</td>
+                    <td>Yes</td>
+                    <td>Fragile</td>
+                </tr>
+                
+                <tr>
+                    <td>exec_count</td>
+                    <td>No</td>
+                    <td>High</td>
+                </tr>
+                
+            </tbody>
+        </table>
+        
+        <script>
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ["eager", "lazy", "lease", "exec_count"],
+                    datasets: [{
+                        label: 'Metrics',
+                        data: [0, 0, 0, 0]
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        </script>
+    </main>
+</body>
+</html>
