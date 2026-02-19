@@ -32,3 +32,8 @@ narrative_baseline:
 
 performance_ratio:
   eager_vs_lazy_cost: "25-50x"   # eager revalidation ~25-50× more expensive per auth check
+
+delegation:
+  max_depth: 3
+  require_scope_subset: true
+  propagate_remaining_ops: true

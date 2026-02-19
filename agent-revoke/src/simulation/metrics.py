@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 from rich.table import Table
@@ -40,6 +40,9 @@ class SimulationMetrics:
     wall_time_seconds: float = 0.0
     avg_tick_seconds: float = 0.0
     p95_tick_seconds: float = 0.0
+    cascade_completeness_ratio: float = 0.0
+    cascade_completion_ticks: List[int] = field(default_factory=list)
+    bound_violations_by_depth: Dict[int, int] = field(default_factory=dict)
 
     def summary_table(self) -> str:
         """Render a Rich table for terminal output."""
@@ -83,6 +86,7 @@ class MetricsCollector:
         self._transient_state_timeouts: int = 0
         self._unauthorized_actions_in_transient: int = 0
         self._tick_durations: List[float] = []
+        self._bound_violations_by_depth: Dict[int, int] = defaultdict(int)
 
     def record_action(self, record: ActionRecord):
         """Record an action event."""
@@ -110,6 +114,10 @@ class MetricsCollector:
     def record_tick_duration(self, seconds: float):
         """Record wall-clock duration of one simulation tick."""
         self._tick_durations.append(seconds)
+
+    def record_bound_violation(self, depth: int) -> None:
+        """Record a per-depth unauthorized bound violation."""
+        self._bound_violations_by_depth[depth] += 1
 
     def finalize(
         self,
@@ -171,4 +179,7 @@ class MetricsCollector:
             wall_time_seconds=wall_time_seconds,
             avg_tick_seconds=avg_tick_seconds,
             p95_tick_seconds=p95_tick_seconds,
+            cascade_completeness_ratio=monitor.get_overall_cascade_completeness_ratio(),
+            cascade_completion_ticks=monitor.get_cascade_completion_latencies(),
+            bound_violations_by_depth=dict(self._bound_violations_by_depth),
         )

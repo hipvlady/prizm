@@ -10,10 +10,15 @@ from src.authority.broadcaster import RevocationBroadcaster
 from src.authority.registry import CapabilityRegistry
 from src.authority.trust_scorer import TrustScorer
 from src.core.clock import LogicalClock
-from src.core.exceptions import RevocationError
+from src.core.exceptions import (
+    DelegationDepthExceededError,
+    RemainingOpsPropagationError,
+    RevocationError,
+)
 from src.core.logging_utils import get_logger
 from src.core.types import (
     Capability,
+    DelegationPolicy,
     MESIState,
     RevocationEvent,
     RevocationReason,
@@ -34,6 +39,7 @@ class AuthorityService:
         trust_scorer: TrustScorer,
         clock: LogicalClock,
         monitor: Optional[ConsistencyMonitor] = None,
+        delegation_policy: Optional[DelegationPolicy] = None,
     ):
         """Initialise authority service dependencies.
 
@@ -55,6 +61,17 @@ class AuthorityService:
         self.trust_scorer = trust_scorer
         self.clock = clock
         self.monitor = monitor if monitor is not None else ConsistencyMonitor()
+        self.delegation_policy = delegation_policy if delegation_policy is not None else DelegationPolicy()
+
+    def set_delegation_policy(self, policy: DelegationPolicy) -> None:
+        """Update delegation policy at runtime.
+
+        Parameters
+        ----------
+        policy : DelegationPolicy
+            Policy containing depth and propagation constraints.
+        """
+        self.delegation_policy = policy
 
     def grant_capability(
         self,
@@ -144,6 +161,7 @@ class AuthorityService:
             capability_id=capability_id,
             reason=reason,
             issued_tick=self.clock.now(),
+            root_capability_id=capability_id,
             cascade=cascade,
         )
 
@@ -162,10 +180,12 @@ class AuthorityService:
             raise RevocationError(capability_id, "failed to invalidate parent capability") from exc
 
         agents_to_notify = {cap.agent_id}
+        expected_capabilities = {cap.id}
 
         for sibling in self.registry.list_by_agent_resource(cap.agent_id, cap.resource):
             if sibling.id == cap.id or sibling.state == MESIState.INVALID:
                 continue
+            expected_capabilities.add(sibling.id)
             sibling_data = sibling.to_dict()
             sibling_data["state"] = MESIState.INVALID
             sibling_data["version"] = sibling.version + 1
@@ -176,6 +196,7 @@ class AuthorityService:
         if cascade:
             descendants = self.registry.get_delegation_chain(capability_id)
             for descendant in descendants:
+                expected_capabilities.add(descendant.id)
                 child_data = descendant.to_dict()
                 child_data["state"] = MESIState.INVALID
                 child_data["version"] = descendant.version + 1
@@ -183,6 +204,8 @@ class AuthorityService:
                 child_data["transient_entered_tick"] = None
                 self.registry.update(Capability(**child_data))
                 agents_to_notify.add(descendant.agent_id)
+
+        event.expected_capabilities.update(expected_capabilities)
 
         self.monitor.record_revocation_broadcast(event, set(agents_to_notify))
         self.broadcaster.broadcast(event, list(agents_to_notify))
@@ -220,6 +243,10 @@ class AuthorityService:
         ------
         RevocationError
             If parent capability cannot be found.
+        DelegationDepthExceededError
+            If delegation exceeds configured maximum depth.
+        RemainingOpsPropagationError
+            If parent has no remaining operation budget to propagate.
         ScopeAttenuationError
             If delegated scope exceeds parent scope.
         """
@@ -227,12 +254,32 @@ class AuthorityService:
         if not parent_cap:
             raise RevocationError(parent_cap_id, "parent capability not found")
 
-        if not set(attenuated_scope).issubset(set(parent_cap.scope)):
+        if self.delegation_policy.require_scope_subset and not set(attenuated_scope).issubset(
+            set(parent_cap.scope)
+        ):
             raise ScopeAttenuationError(tuple(attenuated_scope), parent_cap.scope)
 
         remaining_ops = None
-        if parent_cap.max_operations is not None:
+        child_depth = parent_cap.delegation_depth + 1
+        if child_depth > self.delegation_policy.max_depth:
+            raise DelegationDepthExceededError(
+                parent_capability_id=parent_cap.id,
+                parent_depth=parent_cap.delegation_depth,
+                max_depth=self.delegation_policy.max_depth,
+            )
+
+        if self.delegation_policy.propagate_remaining_ops and parent_cap.max_operations is not None:
             remaining_ops = parent_cap.max_operations - parent_cap.operations_used
+            if remaining_ops < 0:
+                raise RemainingOpsPropagationError(
+                    parent_cap.id,
+                    "remaining operations became negative; parent state is inconsistent",
+                )
+            if remaining_ops == 0:
+                raise RemainingOpsPropagationError(
+                    parent_cap.id,
+                    "cannot delegate exhausted capability (remaining operations == 0)",
+                )
 
         child = self.grant_capability(
             agent_id=to_agent_id,
@@ -309,4 +356,8 @@ class AuthorityService:
             "event_id": event_id,
             "pending_acks": pending_count,
             "propagated": self.monitor.get_propagation_map(event_id),
+            "cascade_completeness_ratio": self.monitor.get_cascade_completeness_ratio(event_id),
+            "cascade_completion_tick": self.monitor.get_cascade_completion_tick(event_id),
+            "expected_capabilities": self.monitor.get_expected_capabilities(event_id),
+            "invalidated_capabilities": self.monitor.get_invalidated_capabilities(event_id),
         }

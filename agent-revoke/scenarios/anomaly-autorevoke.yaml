@@ -29,3 +29,8 @@ trust:
   initial_score: 0.8
   anomaly_threshold: 0.4 # Auto-revoke when score drops below this
   score_decay_on_anomaly: 0.5 # A significant drop when anomaly is detected
+
+delegation:
+  max_depth: 3
+  require_scope_subset: true
+  propagate_remaining_ops: true

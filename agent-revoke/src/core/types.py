@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from uuid import UUID, uuid4
 
 from ..strategies.base import ActionResult
@@ -36,6 +36,15 @@ class ScopeAttenuationError(Exception):
 
 class CapabilityExhaustedError(Exception):
     """Raised when operation budget is exhausted."""
+
+
+@dataclass(frozen=True)
+class DelegationPolicy:
+    """Delegation guardrails for depth and operation budget propagation."""
+
+    max_depth: int = 16
+    require_scope_subset: bool = True
+    propagate_remaining_ops: bool = True
 
 
 @dataclass(frozen=True)
@@ -89,8 +98,12 @@ class RevocationEvent:
     reason: RevocationReason
     issued_tick: int
     id: UUID = field(default_factory=uuid4)
+    root_capability_id: Optional[UUID] = None
     cascade: bool = False
     propagated: Dict[UUID, Optional[int]] = field(default_factory=dict)
+    expected_capabilities: Set[UUID] = field(default_factory=set)
+    invalidated_capabilities: Set[UUID] = field(default_factory=set)
+    cascade_completion_tick: Optional[int] = None
 
 
 @dataclass(frozen=True)
