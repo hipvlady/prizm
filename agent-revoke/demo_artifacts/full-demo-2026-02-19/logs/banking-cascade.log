@@ -1,0 +1,7 @@
+Scenario: scenarios/banking-cascade.yaml
+Strategies: eager, lazy, lease, exec_count
+Report: demo_artifacts/full-demo-2026-02-19/reports/banking-cascade-comparison.html
+- eager: unauthorized=17, staleness_max=10, p50=10, wall_s=0.011412
+- lazy: unauthorized=17, staleness_max=10, p50=0.0, wall_s=0.012095
+- lease: unauthorized=136, staleness_max=99, p50=0.0, wall_s=0.014463
+- exec_count: unauthorized=129, staleness_max=99, p50=0.0, wall_s=0.016026

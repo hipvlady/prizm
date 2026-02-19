@@ -1,0 +1,7 @@
+Scenario: scenarios/anomaly-autorevoke.yaml
+Strategies: eager, lazy, lease, exec_count
+Report: demo_artifacts/full-demo-2026-02-19/reports/anomaly-autorevoke-comparison.html
+- eager: unauthorized=0, staleness_max=0, p50=0.0, wall_s=0.006726
+- lazy: unauthorized=0, staleness_max=0, p50=0.0, wall_s=0.008772
+- lease: unauthorized=0, staleness_max=0, p50=0.0, wall_s=0.007004
+- exec_count: unauthorized=0, staleness_max=0, p50=0.0, wall_s=0.013284

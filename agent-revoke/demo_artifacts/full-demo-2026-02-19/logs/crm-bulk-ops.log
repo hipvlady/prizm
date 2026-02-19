@@ -1,0 +1,7 @@
+Scenario: scenarios/crm-bulk-ops.yaml
+Strategies: eager, lazy, lease, exec_count
+Report: demo_artifacts/full-demo-2026-02-19/reports/crm-bulk-ops-comparison.html
+- eager: unauthorized=500, staleness_max=5, p50=5.0, wall_s=0.096315
+- lazy: unauthorized=2400, staleness_max=24, p50=0.0, wall_s=0.102000
+- lease: unauthorized=6000, staleness_max=60, p50=0.0, wall_s=0.146291
+- exec_count: unauthorized=50, staleness_max=0, p50=0.0, wall_s=0.091402
