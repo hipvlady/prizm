@@ -209,3 +209,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .codegraph/
+
+# Cleanup: local assistant metadata
+.claude/
+**/CLAUDE.md
+**/.claudeignore
+**/.mgrepignore
+**/.codegraph/
+**/memory/
