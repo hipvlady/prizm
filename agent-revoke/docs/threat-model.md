@@ -1,19 +1,35 @@
 # Threat Model
 
-## Scenario 1: Banking Cascade Delay
+## Threat 1: Banking Cascade Delay
 
-- Root capability revoked in a delegation chain.
-- Risk: downstream agent continues acting during propagation window.
-- Control: eager invalidation or short bounded strategy with cascade metrics by depth.
+- Trigger: root capability in a delegation chain is revoked.
+- Risk: downstream delegees keep acting before local cache invalidation.
+- Controls implemented:
+  - BFS cascade traversal,
+  - strategy comparison under controlled latency,
+  - per-depth unauthorised tracking.
+- Residual risk:
+  - consistency-directed strategies depend on check cadence/TTL/ops budget.
 
-## Scenario 2: High-Velocity CRM Agent
+## Threat 2: High-Velocity Credential Compromise
 
-- Credential compromise under heavy action rate.
-- Risk: large unauthorized operation volume before revocation converges.
-- Control: exec-count bounded credentials to cap impact deterministically.
+- Trigger: compromised CRM sync agent continues high-rate actions.
+- Risk: very large post-revoke volume in short time.
+- Controls implemented:
+  - deterministic high-velocity scenario,
+  - operation-count strategy (`exec_count`) with strict cap,
+  - bound checker with per-depth support.
 
-## Scenario 3: Behavioural Anomaly
+## Threat 3: Behavioural Anomaly Window
 
-- Agent behaviour shifts (timing/bulk pattern).
-- Risk: delayed human response to compromised automation.
-- Control: trust scorer anomaly trigger with automatic revocation.
+- Trigger: agent behaviour deviates (timing/volume patterns).
+- Risk: delayed manual response.
+- Controls implemented:
+  - trust scorer anomaly checks,
+  - automatic revoke trigger path.
+- Residual risk:
+  - anomaly scenario remains a simulation approximation.
+
+## Security Posture Summary
+
+The prototype is strongest at demonstrating measurable revocation-window impact and strategy trade-offs. It is not a production IAM system.

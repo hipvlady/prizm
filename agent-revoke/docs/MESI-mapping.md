@@ -2,25 +2,41 @@
 
 ## Stable States
 
-- `Modified` -> agent delegated further; local authority view is stale until cascade settles.
-- `Exclusive` -> sole holder of delegated capability.
-- `Shared` -> multiple read-capable holders.
-- `Invalid` -> revoked/expired/exhausted capability.
+| MESI State | Capability Meaning | Security Interpretation |
+|---|---|---|
+| `Modified` | Delegated further; local owner has dirty authority view | Chain extension in progress may require cascade invalidation |
+| `Exclusive` | Single valid holder | Sole actor currently authorised |
+| `Shared` | Multiple read-capable holders | Parallel limited access |
+| `Invalid` | Revoked / expired / exhausted | Authorisation denied |
 
 ## Transient States
 
-- `ISG`, `IED` -> acquisition/delegation in flight; deny actions.
-- `EIA`, `SIA` -> invalidation in flight; strategy-dependent allowance.
-- `MIC`, `MIA` -> cascade teardown; writes denied, reads may continue.
+| State | Transition Intent | Action Handling |
+|---|---|---|
+| `ISG` | Invalid -> Shared (await grant) | deny |
+| `IED` | Invalid -> Exclusive (await delegation setup) | deny |
+| `EIA` | Exclusive -> Invalid (await acknowledgement) | strategy-dependent |
+| `SIA` | Shared -> Invalid (await acknowledgement) | strategy-dependent |
+| `MIC` | Modified -> Invalid (await cascade completion) | restrictive |
+| `MIA` | Modified -> Invalid (await delegator acknowledgement) | restrictive |
 
-## Protocol Mapping
+Transient timeout fail-safe (ADR-005): unresolved transient state moves to `Invalid` after configured timeout.
+
+## Protocol-Level Analogy
 
 - Invalidation broadcast -> revocation event broadcast.
-- Snooping -> all-agent subscription in MVP.
-- Directory-style scaling -> targeted broadcast by affected agent IDs.
+- Snooping topology -> all-agent subscription in MVP.
+- Directory-style targeting -> recipient-filtered propagation map.
 
-## Invariant Highlights
+## Coherence Class Mapping
 
-- SWMR: at most one writer-level holder (`M`/`E`) at a time.
-- Bounded staleness: enforced by strategy bound (time or operations).
-- Fail-safe: transient timeout always converges to `Invalid`.
+- Consistency-agnostic: `eager`
+- Consistency-directed: `lazy`, `lease`, `exec_count`
+
+## Practical Security Meaning
+
+The mapping provides a concrete mental model for stale-credential behaviour:
+
+- stale reads/writes correspond to stale local capability states,
+- invalidation strategy determines security window,
+- measured unauthorised operations quantify damage during coherence lag.

@@ -1,21 +1,33 @@
 # Industry Context
 
-## OpenID Agentic AI
+## Why This Problem Is Practical
 
-- Revocation across delegated/offline chains is a central unresolved challenge.
-- Execution-count constrained credentials provide explicit impact bounds.
+Agentic IAM systems increasingly use delegated credentials and cached decisions for performance. Revocation lag creates a measurable attack window.
 
-## CSA Agentic IAM
+## Framing Sources
 
-- Continuous verification and dynamic trust posture are required for autonomous systems.
+### OpenID Agentic AI
 
-## Oso / Practical Authorization
+- Highlights revocation propagation across delegated/offline chains as unresolved.
+- Motivates operation-bounded credentials as explicit impact control.
 
-- Business context drives coherence choice:
-  - banking-like workloads prefer stricter consistency;
-  - productivity workloads may accept bounded staleness.
+### CSA Agentic IAM
 
-## Ping Identity
+- Emphasises continuous verification and dynamic trust posture.
+- Supports anomaly-triggered revocation as standard control.
 
-- Delegation should remain auditable and distinct from impersonation.
-- Monitoring plus auto-revocation is a practical baseline control.
+### Oso and Production Authorisation
+
+- Illustrates latency-vs-freshness trade-offs by workload.
+- Reinforces policy choice by risk profile (for example payments vs CRM sync).
+
+### Ping Identity Guidance
+
+- Delegation must remain auditable and distinct from impersonation.
+- Behaviour monitoring plus automatic controls are practical defaults.
+
+## How `agent-revoke` Uses This Context
+
+- Compares strict vs relaxed revocation consistency models.
+- Quantifies post-revoke impact with deterministic and stochastic scenarios.
+- Adds delegation-depth analysis so chain effects are explicit.
