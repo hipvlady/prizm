@@ -2,7 +2,17 @@ import pytest
 from uuid import uuid4, UUID
 from collections import deque
 from src.core.clock import LogicalClock
-from src.core.types import MESIState, RevocationReason, ScopeAttenuationError, ActionRecord, ActionResult, RevocationEvent, Capability
+from src.core.types import (
+    MESIState,
+    RevocationReason,
+    ScopeAttenuationError,
+    ActionRecord,
+    ActionResult,
+    RevocationEvent,
+    Capability,
+    DelegationPolicy,
+)
+from src.core.exceptions import DelegationDepthExceededError, RemainingOpsPropagationError
 from src.authority.registry import CapabilityRegistry
 from src.authority.broadcaster import RevocationBroadcaster
 from src.authority.trust_scorer import TrustScorer
@@ -77,3 +87,68 @@ def test_cascade_revoke_sends_multiple_events(authority_components):
     recipients = {msg["recipient"] for msg in message_bus}
     assert recipients == {a, b, c, d}
 
+
+def test_delegate_allows_exact_max_depth(authority: AuthorityService):
+    authority.set_delegation_policy(DelegationPolicy(max_depth=2))
+    a, b, c = uuid4(), uuid4(), uuid4()
+    root = authority.grant_capability(a, "resource", scope=["read", "write"])
+    child = authority.delegate_capability(a, b, root.id, ["read"])
+    grandchild = authority.delegate_capability(b, c, child.id, ["read"])
+    assert grandchild.delegation_depth == 2
+
+
+def test_delegate_rejects_depth_overflow(authority: AuthorityService):
+    authority.set_delegation_policy(DelegationPolicy(max_depth=1))
+    a, b, c = uuid4(), uuid4(), uuid4()
+    root = authority.grant_capability(a, "resource", scope=["read", "write"])
+    child = authority.delegate_capability(a, b, root.id, ["read"])
+    with pytest.raises(DelegationDepthExceededError):
+        authority.delegate_capability(b, c, child.id, ["read"])
+
+
+def test_delegate_propagates_remaining_ops_exact(authority: AuthorityService):
+    authority.set_delegation_policy(DelegationPolicy(max_depth=3, propagate_remaining_ops=True))
+    a, b = uuid4(), uuid4()
+    parent = authority.grant_capability(
+        a, "resource", scope=["read", "write"], max_operations=10
+    )
+    parent_data = parent.to_dict()
+    parent_data["operations_used"] = 4
+    authority.registry.update(Capability(**parent_data))
+
+    child = authority.delegate_capability(a, b, parent.id, ["read"])
+    assert child.max_operations == 6
+
+
+def test_delegate_rejects_exhausted_parent_ops(authority: AuthorityService):
+    authority.set_delegation_policy(DelegationPolicy(max_depth=3, propagate_remaining_ops=True))
+    a, b = uuid4(), uuid4()
+    parent = authority.grant_capability(
+        a, "resource", scope=["read", "write"], max_operations=5
+    )
+    parent_data = parent.to_dict()
+    parent_data["operations_used"] = 5
+    authority.registry.update(Capability(**parent_data))
+
+    with pytest.raises(RemainingOpsPropagationError):
+        authority.delegate_capability(a, b, parent.id, ["read"])
+
+
+@pytest.mark.parametrize("chain_depth", [1, 2, 3, 4])
+def test_cascade_expected_capabilities_matches_chain_depth(authority_components, chain_depth: int):
+    clock, registry, broadcaster, trust_scorer, message_bus = authority_components
+    authority = AuthorityService(registry, broadcaster, trust_scorer, clock)
+    authority.set_delegation_policy(DelegationPolicy(max_depth=8))
+    agents = [uuid4() for _ in range(chain_depth)]
+
+    root = authority.grant_capability(agents[0], "resource", scope=["read", "write"])
+    parent_agent = agents[0]
+    parent_cap = root
+    for i in range(1, chain_depth):
+        child = authority.delegate_capability(parent_agent, agents[i], parent_cap.id, ["read"])
+        parent_agent = agents[i]
+        parent_cap = child
+
+    event = authority.revoke_capability(root.id, RevocationReason.EXPLICIT, cascade=True)
+    assert len(event.expected_capabilities) == chain_depth
+    assert len(message_bus) == chain_depth

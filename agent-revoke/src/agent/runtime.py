@@ -8,6 +8,7 @@ from uuid import UUID
 
 from src.core.exceptions import CacheMissError
 from src.core.logging_utils import get_logger
+from src.core.mesi import MESIState
 from src.core.types import ActionRecord, Capability, RevocationEvent
 from src.strategies.base import ActionResult
 
@@ -95,7 +96,21 @@ class AgentRuntime:
         ack_tick = self.clock.now() if tick is None else tick
         event.propagated[self.agent_id] = ack_tick
         self.monitor.record_agent_ack(self.agent_id, event.id, ack_tick)
-        self.invalidate_capability(event.capability_id)
+        invalidated: set[UUID] = set()
+        if event.cascade and event.expected_capabilities:
+            for cap_id, cap in list(self.state.capabilities.items()):
+                if cap_id in event.expected_capabilities and cap.state != MESIState.INVALID:
+                    self.invalidate_capability(cap_id)
+                    invalidated.add(cap_id)
+        else:
+            cap = self.state.capabilities.get(event.capability_id)
+            if cap is not None and cap.state != MESIState.INVALID:
+                self.invalidate_capability(event.capability_id)
+                invalidated.add(event.capability_id)
+
+        for cap_id in invalidated:
+            event.invalidated_capabilities.add(cap_id)
+            self.monitor.mark_capability_invalidated(event.id, cap_id, ack_tick)
         LOGGER.info(
             "event=revocation_ack agent=%s event_id=%s capability=%s",
             self.agent_id,

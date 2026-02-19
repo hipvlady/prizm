@@ -28,6 +28,7 @@ def test_engine_runs_banking_cascade(scenarios_path):
     assert metrics is not None
     assert metrics.scenario == scenario_file
     assert metrics.strategy == "eager"
+    assert metrics.cascade_completeness_ratio == 1.0
 
 def test_engine_crm_exec_count(scenarios_path):
     scenario_file = os.path.join(scenarios_path, "crm-bulk-ops.yaml")
@@ -52,6 +53,15 @@ def test_engine_crm_lease_bound(scenarios_path):
     # With a TTL of 600 and duration of 500, no lease should expire.
     # Revocation at tick 50 will cause unauthorized actions.
     assert metrics.unauthorized_actions_count > 0
+
+
+@pytest.mark.parametrize("strategy", ["eager", "lazy", "lease", "exec_count"])
+def test_reference_configs_have_no_bound_violations(scenarios_path, strategy):
+    scenario_file = os.path.join(scenarios_path, "crm-bulk-ops.yaml")
+    config = load_scenario(scenario_file)
+    engine = SimulationEngine(config, strategy, scenario_file)
+    metrics = engine.run()
+    assert sum(metrics.bound_violations_by_depth.values()) == 0
 
 
 def test_anomaly_triggers_revocation(scenarios_path):

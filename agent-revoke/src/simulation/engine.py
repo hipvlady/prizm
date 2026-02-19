@@ -7,7 +7,7 @@ import argparse
 import copy
 import logging
 import random
-from collections import deque
+from collections import defaultdict, deque
 from time import perf_counter
 from typing import Any, Dict
 from uuid import UUID, uuid4
@@ -22,10 +22,11 @@ from src.authority.trust_scorer import TrustScorer
 from src.core.clock import LogicalClock
 from src.core.exceptions import StaleCredentialError
 from src.core.logging_utils import configure_logging, get_logger
-from src.core.types import MESIState, RevocationReason
+from src.core.types import DelegationPolicy, MESIState, RevocationReason
 from src.output.terminal import SimulationLiveView
 from src.simulation.consistency import ConsistencyMonitor
 from src.simulation.metrics import MetricsCollector
+from src.simulation.bounds import calculate_depth_bound
 from src.strategies.base import RevocationStrategy
 from src.strategies.eager import EagerInvalidationStrategy
 from src.strategies.exec_count import ExecCountStrategy
@@ -59,6 +60,8 @@ class SimulationEngine:
         self.consistency_monitor = ConsistencyMonitor()
         self.metrics_collector = MetricsCollector()
         self.message_bus = deque()
+        self._depth_unauthorized_counts: Dict[int, int] = defaultdict(int)
+        self._remaining_ops_at_revoke_by_depth: Dict[int, int] = {}
         self.live_view = SimulationLiveView(
             enabled=bool(self.config["simulation"].get("live_output", False))
         )
@@ -79,8 +82,19 @@ class SimulationEngine:
             rng=self.rng,
         )
         trust_scorer = TrustScorer()
+        delegation_cfg = self.config.get("delegation", {})
+        delegation_policy = DelegationPolicy(
+            max_depth=delegation_cfg.get("max_depth", 16),
+            require_scope_subset=delegation_cfg.get("require_scope_subset", True),
+            propagate_remaining_ops=delegation_cfg.get("propagate_remaining_ops", True),
+        )
         self.authority = AuthorityService(
-            registry, broadcaster, trust_scorer, self.clock, self.consistency_monitor
+            registry,
+            broadcaster,
+            trust_scorer,
+            self.clock,
+            self.consistency_monitor,
+            delegation_policy=delegation_policy,
         )
         self.strategy = self._create_strategy(strategy_name)
 
@@ -182,6 +196,9 @@ class SimulationEngine:
         if tick == revocation_tick:
             root_cap_id = self.config["scenario"].get("root_capability_id")
             if root_cap_id:
+                self._remaining_ops_at_revoke_by_depth = self._snapshot_remaining_ops_by_depth(
+                    root_cap_id, self.config["scenario"]["cascade_revocation"]
+                )
                 self.authority.revoke_capability(
                     capability_id=root_cap_id,
                     reason=RevocationReason.EXPLICIT,
@@ -224,6 +241,9 @@ class SimulationEngine:
                         except StaleCredentialError as exc:
                             LOGGER.warning("event=stale_action %s", exc)
                         self.metrics_collector.record_unauthorized_action(action_record)
+                        depth = action_record.delegation_depth
+                        self._depth_unauthorized_counts[depth] += 1
+                        self._check_bound_violation(depth)
 
     def _run_anomaly_detection(self) -> None:
         """Run trust scorer anomaly detection and trigger auto-revocation."""
@@ -245,6 +265,33 @@ class SimulationEngine:
                             cascade=True,
                         )
                         break
+
+    def _snapshot_remaining_ops_by_depth(self, root_capability_id: UUID, cascade: bool) -> Dict[int, int]:
+        """Snapshot remaining operation budgets grouped by depth at revoke tick."""
+        root = self.authority.registry.get(root_capability_id)
+        if root is None:
+            return {}
+        caps = [root]
+        if cascade:
+            caps.extend(self.authority.registry.get_delegation_chain(root_capability_id))
+        grouped: Dict[int, int] = defaultdict(int)
+        for cap in caps:
+            if cap.max_operations is None:
+                continue
+            remaining = max(0, cap.max_operations - cap.operations_used)
+            grouped[cap.delegation_depth] += remaining
+        return dict(grouped)
+
+    def _check_bound_violation(self, depth: int) -> None:
+        """Check and record per-depth unauthorized bound violations."""
+        bound = calculate_depth_bound(
+            self.strategy_name,
+            depth,
+            self.config,
+            remaining_ops_at_revoke=self._remaining_ops_at_revoke_by_depth.get(depth),
+        )
+        if self._depth_unauthorized_counts[depth] > bound:
+            self.metrics_collector.record_bound_violation(depth)
 
     def _setup_scenario(self):
         """Initialise capabilities and delegation topology for scenario."""
