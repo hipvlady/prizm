@@ -1,50 +1,91 @@
-from typing import Dict
-from uuid import UUID
+# Copyright (c) 2026 Prizm contributors.
+"""Lease-based temporal coherence revocation strategy."""
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from __future__ import annotations
+from typing import TYPE_CHECKING, List, Optional
+
+from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
+from src.core.mesi import MESIState, can_act_in_transient
+from src.core.types import Capability
+
+if TYPE_CHECKING:
+    from src.agent.runtime import AgentRuntime
+    from src.core.types import RevocationEvent, ActionRecord
 
 
 class LeaseBasedStrategy(RevocationStrategy):
     """
-    Consistency-directed. Temporal Coherence (Primer Ch.10 §10.1.3).
-    Agent SELF-INVALIDATES on TTL expiry — writer does NOT push invalidation.
-    Staleness bound: ttl_seconds.
+    Temporal Coherence. Agent self-invalidates when its time-based lease expires.
+    Each capability is granted with a TTL (`expires_tick`). The agent is responsible
+    for honoring this limit and self-invalidating its cache.
     """
+    name: str = "lease"
+    coherence_class: CoherenceClass = CoherenceClass.CONSISTENCY_DIRECTED
+    bound_type: BoundType = BoundType.TIME
 
-    name = "lease"
-    coherence_class = "consistency-directed"
-    
-    def __init__(self, default_ttl_ticks: int = 600):
+    def __init__(self, default_ttl_ticks: int = 500):
         self.default_ttl_ticks = default_ttl_ticks
+        self._metrics = StrategyMetrics()
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        # In lease-based strategy, revocation is handled by TTL expiry on the agent side.
-        # The authority still marks the capability as invalid.
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=False,
-            agents_notified=0,
-            agents_acked=0,
-            ticks_elapsed=0,
-            unauthorized_ops_during_propagation=0,
+    def initiate_revocation(self, event: "RevocationEvent", agents: List["AgentRuntime"]) -> None:
+        # Authority can still send an out-of-band revocation to cut a lease short.
+        # The generic `on_revocation_received` in AgentRuntime will handle it.
+        pass
+
+    def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
+        """Check for expiration before use."""
+        lease_valid = capability.expires_tick is None or agent.clock.now() < capability.expires_tick
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+                lease_valid=lease_valid,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
+
+        if capability.state == MESIState.INVALID:
+            return ActionResult.DENIED_INVALID
+
+        if capability.expires_tick is not None and agent.clock.now() >= capability.expires_tick:
+            agent.invalidate_capability(capability.id)
+            return ActionResult.EXPIRED
+            
+        return ActionResult.ALLOWED
+
+    def on_tick(self, agent: "AgentRuntime", tick: int) -> None:
+        """Proactively check for and invalidate expired leases."""
+        for cap_id, cap in list(agent.state.capabilities.items()):
+            if cap.state != MESIState.INVALID and cap.expires_tick is not None and tick >= cap.expires_tick:
+                agent.invalidate_capability(cap_id)
+
+    def record_action(self, agent: "AgentRuntime", capability: "Capability", action: "ActionRecord") -> None:
+        pass  # No specific recording logic for lease-based strategy
+
+    def revalidate(self, agent: "AgentRuntime", capability: "Capability") -> Optional["Capability"]:
+        """
+        Requests a new capability from the authority after the old one has expired.
+        """
+        status = agent.authority.check_capability(agent.agent_id, capability.resource)
+        if not status.get("valid", False):
+            return None
+
+        new_cap = agent.authority.grant_capability(
+            agent_id=agent.agent_id,
+            resource=capability.resource,
+            scope=capability.scope,
+            ttl=self.default_ttl_ticks,
         )
+        if new_cap:
+            agent.cache.update(new_cap)
+        return new_cap
 
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        # The agent's attempt_action logic already handles TTL expiry.
-        return agent.attempt_action(resource)
+    def get_metrics(self) -> "StrategyMetrics":
+        return self._metrics
 
-    def get_staleness_bound(self) -> str:
-        return f"{self.default_ttl_ticks} ticks TTL"
+    def get_theoretical_bound(self) -> str:
+        return f"Staleness is bounded by the lease TTL (default: {self.default_ttl_ticks} ticks)."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

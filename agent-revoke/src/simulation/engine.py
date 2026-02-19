@@ -1,138 +1,307 @@
-import argparse
-import yaml
-from typing import Dict, List
-from uuid import UUID, uuid4
-import time
-import random
+# Copyright (c) 2026 Prizm contributors.
+"""Simulation engine for temporal consistency experiments."""
 
-from core.clock import LogicalClock
-from core.types import Capability, ActionResult, MESIState
-from strategies.base import RevocationStrategy
-from strategies.eager import EagerInvalidationStrategy
-from strategies.lazy import LazyInvalidationStrategy
-from strategies.lease import LeaseBasedStrategy
-from strategies.exec_count import ExecCountBoundedStrategy
-from authority.service import AuthorityService
-from authority.registry import CapabilityRegistry
-from authority.broadcaster import RevocationBroadcaster
-from authority.trust_scorer import TrustScorer
-from agent.runtime import AgentRuntime
-from agent.cache import CapabilityCache
-from simulation.network import SimulatedNetwork
-from simulation.metrics import SimulationMetrics, MetricsCollector
-from output.terminal import print_tick
-from simulation.scenarios import load_scenario
+from __future__ import annotations
+
+import argparse
+import copy
+import logging
+import random
+from collections import deque
+from time import perf_counter
+from typing import Any, Dict
+from uuid import UUID, uuid4
+
+import yaml
+
+from src.agent.runtime import AgentRuntime
+from src.authority.broadcaster import RevocationBroadcaster
+from src.authority.registry import CapabilityRegistry
+from src.authority.service import AuthorityService
+from src.authority.trust_scorer import TrustScorer
+from src.core.clock import LogicalClock
+from src.core.exceptions import StaleCredentialError
+from src.core.logging_utils import configure_logging, get_logger
+from src.core.types import MESIState, RevocationReason
+from src.output.terminal import SimulationLiveView
+from src.simulation.consistency import ConsistencyMonitor
+from src.simulation.metrics import MetricsCollector
+from src.strategies.base import RevocationStrategy
+from src.strategies.eager import EagerInvalidationStrategy
+from src.strategies.exec_count import ExecCountStrategy
+from src.strategies.lazy import LazyInvalidationStrategy
+from src.strategies.lease import LeaseBasedStrategy
+
+LOGGER = get_logger(__name__)
+
 
 class SimulationEngine:
-    def __init__(self, config: Dict, strategy: RevocationStrategy):
-        self.config = config
-        self.strategy = strategy
+    """Drive scenario execution and collect consistency metrics."""
+
+    def __init__(self, config: Dict[str, Any], strategy_name: str, scenario_name: str):
+        """Initialise simulation components.
+
+        Parameters
+        ----------
+        config : dict
+            Scenario configuration.
+        strategy_name : str
+            Strategy identifier.
+        scenario_name : str
+            Scenario label for reporting.
+        """
+        self.config = copy.deepcopy(config)
         self.clock = LogicalClock()
-        self.network = SimulatedNetwork(latency_ticks=config.get('network_latency_ticks', 1))
-        
-        self.registry = CapabilityRegistry()
-        self.broadcaster = RevocationBroadcaster()
-        self.trust_scorer = TrustScorer()
-        self.authority = AuthorityService(self.registry, self.broadcaster, self.trust_scorer, self.clock)
-        
-        self.agents: Dict[UUID, AgentRuntime] = {}
-        for i in range(config['agents']):
-            agent_id = uuid4()
-            cache = CapabilityCache()
-            self.agents[agent_id] = AgentRuntime(agent_id, self.authority, cache, self.clock)
+        self.strategy_name = strategy_name
+        self.scenario_name = scenario_name
+        self.rng = random.Random(self.config["simulation"].get("seed", 42))
 
+        self.consistency_monitor = ConsistencyMonitor()
         self.metrics_collector = MetricsCollector()
-
-    def run(self) -> SimulationMetrics:
-        # Initial capability grants
-        agent_list = list(self.agents.values())
-        parent_agent = agent_list[0]
-        parent_cap = self.authority.grant_capability(
-            parent_agent.agent_id,
-            "resource:read",
-            scope=["read", "write"],
-            ttl=self.config.get('credentials', {}).get('lease_ttl_ticks'),
-            max_operations=self.config.get('credentials', {}).get('exec_count_max_operations')
+        self.message_bus = deque()
+        self.live_view = SimulationLiveView(
+            enabled=bool(self.config["simulation"].get("live_output", False))
         )
-        parent_agent.cache.store(parent_cap)
 
-        for i in range(1, len(agent_list)):
+        latency_ticks = self.config["simulation"].get("latency_ticks", 1)
+        network_cfg = self.config.get("network", {})
+        message_loss_rate = self.config["simulation"].get(
+            "message_loss_rate",
+            network_cfg.get("message_loss_rate", 0.0),
+        )
+        registry = CapabilityRegistry()
+        broadcaster = RevocationBroadcaster(
+            self.message_bus,
+            latency_ticks,
+            self.clock,
+            self.metrics_collector,
+            message_loss_rate=message_loss_rate,
+            rng=self.rng,
+        )
+        trust_scorer = TrustScorer()
+        self.authority = AuthorityService(
+            registry, broadcaster, trust_scorer, self.clock, self.consistency_monitor
+        )
+        self.strategy = self._create_strategy(strategy_name)
+
+        self.agents: Dict[UUID, AgentRuntime] = {}
+        transient_timeout_ticks = self.config["simulation"].get("transient_timeout_ticks", 5)
+        for _ in range(config["simulation"]["agents"]):
+            agent_id = uuid4()
+            self.agents[agent_id] = AgentRuntime(
+                agent_id=agent_id,
+                authority=self.authority,
+                strategy=self.strategy,
+                clock=self.clock,
+                transient_timeout_ticks=transient_timeout_ticks,
+                monitor=self.consistency_monitor,
+                metrics_collector=self.metrics_collector,
+            )
+
+        self.config["scenario"]["root_capability_id"] = None
+
+    def _create_strategy(self, name: str) -> RevocationStrategy:
+        """Create strategy instance by name."""
+        strat_config = self.config["strategies"].get(name, {})
+        match name:
+            case "eager":
+                return EagerInvalidationStrategy()
+            case "lazy":
+                return LazyInvalidationStrategy(**strat_config)
+            case "lease":
+                return LeaseBasedStrategy(**strat_config)
+            case "exec_count":
+                return ExecCountStrategy(**strat_config)
+            case _:
+                raise ValueError(f"Unknown strategy: {name}")
+
+    def run(self):
+        """Execute simulation and return aggregated metrics."""
+        self._setup_scenario()
+        LOGGER.info(
+            "event=simulation_start scenario=%s strategy=%s",
+            self.scenario_name,
+            self.strategy_name,
+        )
+        self.live_view.start()
+
+        duration_ticks = self.config["simulation"]["duration_ticks"]
+        run_started = perf_counter()
+        try:
+            for _ in range(duration_ticks):
+                current_tick = self.clock.now()
+                tick_started = perf_counter()
+                self._tick(current_tick)
+                tick_elapsed = perf_counter() - tick_started
+                self.metrics_collector.record_tick_duration(tick_elapsed)
+                self.live_view.update(current_tick, self.strategy_name, self.agents)
+                self.clock.advance()
+        finally:
+            self.live_view.stop()
+        run_elapsed = perf_counter() - run_started
+
+        LOGGER.info(
+            "event=simulation_complete scenario=%s strategy=%s wall_seconds=%.6f",
+            self.scenario_name,
+            self.strategy_name,
+            run_elapsed,
+        )
+        return self.metrics_collector.finalize(
+            self.scenario_name,
+            self.strategy_name,
+            duration_ticks,
+            self.consistency_monitor,
+            wall_time_seconds=run_elapsed,
+        )
+
+    def _tick(self, tick: int):
+        """Execute one logical simulation tick."""
+        self._process_message_bus(tick)
+        self._run_agent_maintenance(tick)
+        self._trigger_scheduled_revocations(tick)
+        self._run_agent_actions(tick)
+        self._run_anomaly_detection()
+        self.consistency_monitor.check_staleness(self.agents, tick, self.authority.registry)
+
+    def _process_message_bus(self, tick: int) -> None:
+        """Deliver due revocation messages for current tick."""
+        ready = [msg for msg in self.message_bus if msg["deliver_at"] <= tick]
+        for msg in ready:
+            self.message_bus.remove(msg)
+            self.agents[msg["recipient"]].on_revocation_received(msg["event"], tick)
+
+    def _run_agent_maintenance(self, tick: int) -> None:
+        """Run per-agent timeout and strategy tick handlers."""
+        for agent in self.agents.values():
+            agent.check_transient_timeouts(tick)
+            agent.strategy.on_tick(agent, tick)
+
+    def _trigger_scheduled_revocations(self, tick: int) -> None:
+        """Apply scenario-configured revocation trigger if due."""
+        revocation_tick = self.config["scenario"].get("revocation_trigger_tick")
+        if tick == revocation_tick:
+            root_cap_id = self.config["scenario"].get("root_capability_id")
+            if root_cap_id:
+                self.authority.revoke_capability(
+                    capability_id=root_cap_id,
+                    reason=RevocationReason.EXPLICIT,
+                    cascade=self.config["scenario"]["cascade_revocation"],
+                )
+                LOGGER.info(
+                    "event=scheduled_revoke tick=%d capability=%s",
+                    tick,
+                    root_cap_id,
+                )
+
+    def _run_agent_actions(self, tick: int) -> None:
+        """Run action attempts and stale credential accounting for all agents."""
+        actions_per_tick = self.config["simulation"].get("actions_per_tick")
+        for agent in self.agents.values():
+            if actions_per_tick is None:
+                if self.rng.random() >= self.config["simulation"]["action_probability"]:
+                    continue
+                attempts = 1
+            else:
+                attempts = max(0, int(actions_per_tick))
+
+            for _ in range(attempts):
+                agent_caps = list(agent.state.capabilities.values())
+                if not agent_caps:
+                    break
+                selected_cap = self.rng.choice(agent_caps)
+                action_record = agent.attempt_action(selected_cap.resource, tick)
+                self.metrics_collector.record_action(action_record)
+
+                if action_record.authorized and action_record.capability_id is not None:
+                    authority_cap = self.authority.registry.get(action_record.capability_id)
+                    if authority_cap and authority_cap.state == MESIState.INVALID:
+                        try:
+                            raise StaleCredentialError(
+                                agent.agent_id,
+                                action_record.capability_id,
+                                "action authorised on stale credential",
+                            )
+                        except StaleCredentialError as exc:
+                            LOGGER.warning("event=stale_action %s", exc)
+                        self.metrics_collector.record_unauthorized_action(action_record)
+
+    def _run_anomaly_detection(self) -> None:
+        """Run trust scorer anomaly detection and trigger auto-revocation."""
+        for agent in self.agents.values():
+            is_anomaly = self.authority.trust_scorer.check_anomaly(
+                agent.agent_id, agent.state.action_history
+            )
+            if is_anomaly:
+                for cap in agent.state.capabilities.values():
+                    if cap.state != MESIState.INVALID:
+                        LOGGER.info(
+                            "event=auto_revoke agent=%s capability=%s reason=trust_violation",
+                            agent.agent_id,
+                            cap.id,
+                        )
+                        self.authority.revoke_capability(
+                            capability_id=cap.id,
+                            reason=RevocationReason.TRUST_VIOLATION,
+                            cascade=True,
+                        )
+                        break
+
+    def _setup_scenario(self):
+        """Initialise capabilities and delegation topology for scenario."""
+        scenario_conf = self.config["scenario"]
+        agent_list = list(self.agents.values())
+        if not agent_list:
+            return
+
+        root_agent = agent_list[0]
+        root_cap = self.authority.grant_capability(
+            agent_id=root_agent.agent_id,
+            resource="resource:read_write",
+            scope=("read", "write"),
+            ttl=self.config["strategies"].get("lease", {}).get("default_ttl_ticks"),
+            max_operations=self.config["strategies"].get("exec_count", {}).get("max_operations"),
+        )
+        root_agent.cache.update(root_cap)
+        self.config["scenario"]["root_capability_id"] = root_cap.id
+
+        parent_agent = root_agent
+        parent_cap = root_cap
+        for i in range(1, scenario_conf["delegation_depth"]):
+            if i >= len(agent_list):
+                break
             child_agent = agent_list[i]
             child_cap = self.authority.delegate_capability(
-                parent_agent.agent_id,
-                child_agent.agent_id,
-                parent_cap.id,
-                ["read"]
+                from_agent_id=parent_agent.agent_id,
+                to_agent_id=child_agent.agent_id,
+                parent_cap_id=parent_cap.id,
+                attenuated_scope=("read",),
             )
-            child_agent.cache.store(child_cap)
+            child_agent.cache.update(child_cap)
             parent_agent = child_agent
             parent_cap = child_cap
 
-        for tick in range(self.config.get('simulation_ticks', 1000)):
-            self.clock.advance()
-            self._tick()
-            print_tick(self.clock.now(), "Tick")
-            time.sleep(0.01)
-
-        return self.metrics_collector.finalize(self.config['scenario'], self.strategy.name, self.clock.now())
-
-    def _tick(self):
-        # Process network messages
-        self.network.process(self.clock.now())
-
-        # Agent actions
-        for agent in self.agents.values():
-            cap = agent.cache.get_by_resource("resource:read")
-            if cap:
-                if random.random() < 0.2: # 20% chance of a write
-                    result = agent.attempt_write_action("resource:read")
-                else:
-                    result = self.strategy.on_action_attempt(agent, "resource:read", cap)
-                
-                if result == ActionResult.ALLOWED:
-                    auth_cap = self.authority.registry.get(cap.id)
-                    if auth_cap and auth_cap.state == MESIState.INVALID:
-                        self.metrics_collector.record_unauthorized_action()
-
-        # Revocation trigger
-        revocation_config = self.config.get('revocation', {})
-        if self.clock.now() == revocation_config.get('trigger_at_tick'):
-            root_cap = None
-            for cap in self.registry._capabilities.values():
-                if cap.delegator_id is None:
-                    root_cap = cap
-                    break
-            if root_cap:
-                self.authority.revoke_capability(root_cap.id, revocation_config['reason'], revocation_config['cascade'])
 
 def main():
-    parser = argparse.ArgumentParser(description="Run agent-revoke simulation.")
-    parser.add_argument("--scenario", type=str, required=True, help="Path to the scenario YAML file.")
-    parser.add_argument("--export-metrics", type=str, help="Path to export metrics JSON file.")
-    parser.add_argument("--export-html", type=str, help="Path to export HTML report.")
+    """CLI entry-point for single-strategy simulation run."""
+    parser = argparse.ArgumentParser(description="Run an agent revocation simulation.")
+    parser.add_argument("scenario", help="Path to the scenario YAML file.")
+    parser.add_argument("--strategy", help="Revocation strategy to use.", default="eager")
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging verbosity level.",
+    )
     args = parser.parse_args()
+    configure_logging(getattr(logging, args.log_level))
 
-    config = load_scenario(args.scenario)
-    
-    strategies: List[RevocationStrategy] = []
-    if 'strategies' in config:
-        for strat_name in config['strategies']:
-            if strat_name == 'eager': strategies.append(EagerInvalidationStrategy())
-            if strat_name == 'lazy': strategies.append(LazyInvalidationStrategy())
-            if strat_name == 'lease': strategies.append(LeaseBasedStrategy())
-            if strat_name == 'exec_count': strategies.append(ExecCountBoundedStrategy(config.get('credentials',{}).get('exec_count_max_operations', 50)))
-    else:
-        strat_name = config['strategy']
-        if strat_name == 'eager': strategies.append(EagerInvalidationStrategy())
-        if strat_name == 'lazy': strategies.append(LazyInvalidationStrategy())
-        if strat_name == 'lease': strategies.append(LeaseBasedStrategy())
-        if strat_name == 'exec_count': strategies.append(ExecCountBoundedStrategy(config.get('credentials',{}).get('exec_count_max_operations', 50)))
+    with open(args.scenario, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
 
+    engine = SimulationEngine(config, args.strategy, args.scenario)
+    metrics = engine.run()
+    print(metrics)
 
-    for strategy in strategies:
-        engine = SimulationEngine(config, strategy)
-        metrics = engine.run()
-        print(metrics.summary_table())
 
 if __name__ == "__main__":
     main()

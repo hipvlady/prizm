@@ -1,70 +1,108 @@
-from typing import Dict, Optional, List
+# Copyright (c) 2026 Prizm contributors.
+"""Local agent capability cache operations."""
+
+from __future__ import annotations
+
+from typing import Dict, Optional
 from uuid import UUID
 
-from core.types import Capability, MESIState, ActionResult, CapabilityExhaustedError
-from core.mesi import TransientCapability
+from src.core.mesi import MESIState, TransientState
+from src.core.types import AgentState, Capability
+from src.simulation.metrics import MetricsCollector
 
 
-class CapabilityCache:
-    """Local MESI cache at the PEP (AgentRuntime). NOT canonical state."""
+class AgentCache:
+    """Manage local cache state for one agent."""
 
-    def __init__(self):
-        self._cache: Dict[UUID, Capability] = {}
-        self._transients: Dict[UUID, TransientCapability] = {}
+    def __init__(
+        self,
+        agent_id: UUID,
+        transient_timeout_ticks: int,
+        metrics_collector: Optional[MetricsCollector] = None,
+    ):
+        """Initialise cache.
 
-    def get(self, cap_id: UUID) -> Optional[Capability]:
-        return self._cache.get(cap_id)
+        Parameters
+        ----------
+        agent_id : UUID
+            Agent identifier.
+        transient_timeout_ticks : int
+            Fail-safe timeout for transient states.
+        metrics_collector : MetricsCollector, optional
+            Metrics sink for timeout counters.
+        """
+        self.state = AgentState(agent_id=agent_id)
+        self.transient_timeout_ticks = transient_timeout_ticks
+        self.metrics_collector = metrics_collector
 
-    def store(self, cap: Capability) -> None:
-        self._cache[cap.id] = cap
+    @property
+    def capabilities(self) -> Dict[UUID, Capability]:
+        """Return capability mapping."""
+        return self.state.capabilities
 
-    def invalidate(self, cap_id: UUID) -> None:
-        cap = self.get(cap_id)
-        if cap:
-            new_cap = Capability(**{**cap.__dict__, "state": MESIState.INVALID})
-            self.store(new_cap)
+    def get(self, capability_id: UUID) -> Optional[Capability]:
+        """Fetch capability by identifier."""
+        return self.state.capabilities.get(capability_id)
 
-    def expire_ttl(self, cap_id: UUID, current_tick: float) -> bool:
-        cap = self.get(cap_id)
-        if cap and cap.expires_at is not None and current_tick >= cap.expires_at:
-            self.invalidate(cap_id)
-            return True
-        return False
+    def update(self, capability: Capability):
+        """Insert or replace a capability record."""
+        self.state.capabilities[capability.id] = capability
 
-    def check_exec_count(self, cap_id: UUID) -> ActionResult:
-        cap = self.get(cap_id)
-        if cap:
-            if cap.max_operations is not None and cap.operations_used >= cap.max_operations:
-                return ActionResult.EXHAUSTED
-        return ActionResult.ALLOWED
+    def increment_ops(self, capability_id: UUID):
+        """Increment operation counter for operation-bounded capability."""
+        cap = self.get(capability_id)
+        if cap and cap.max_operations is not None:
+            new_cap_dict = cap.to_dict()
+            new_cap_dict["operations_used"] += 1
+            self.update(Capability(**new_cap_dict))
 
-    def increment_ops(self, cap_id: UUID) -> None:
-        cap = self.get(cap_id)
-        if cap:
-            if cap.max_operations is not None and cap.operations_used >= cap.max_operations:
-                raise CapabilityExhaustedError(cap.id, cap.max_operations)
-            
-            new_ops = cap.operations_used + 1
-            new_cap = Capability(**{**cap.__dict__, "operations_used": new_ops})
-            self.store(new_cap)
+    def find_by_resource(self, resource: str) -> Optional[Capability]:
+        """Find first non-invalid capability for a resource."""
+        for cap in self.state.capabilities.values():
+            if cap.resource == resource and cap.state != MESIState.INVALID:
+                return cap
+        return None
 
-    def update_state(self, cap_id: UUID, new_state: MESIState) -> None:
-        cap = self.get(cap_id)
-        if cap:
-            new_cap = Capability(**{**cap.__dict__, "state": new_state})
-            self.store(new_cap)
-
-    def get_by_resource(self, resource: str) -> Optional[Capability]:
-        for cap in self._cache.values():
+    def find_any_by_resource(self, resource: str) -> Optional[Capability]:
+        """Find first capability for a resource regardless of state."""
+        for cap in self.state.capabilities.values():
             if cap.resource == resource:
                 return cap
         return None
 
-    def cleanup_transients(self, current_tick: float, timeout_ticks: int = 100) -> List[UUID]:
-        resolved_ids = []
-        for cap_id, transient in list(self._transients.items()):
-            if current_tick - transient.tick_entered >= timeout_ticks:
-                self.invalidate(cap_id)
-                resolved_ids.append(cap_id)
-                del self._transients[cap_id]
-        return resolved_ids
+    def invalidate(self, capability_id: UUID):
+        """Force a capability into ``INVALID`` stable state."""
+        cap = self.get(capability_id)
+        if cap and cap.state != MESIState.INVALID:
+            new_cap_data = cap.to_dict()
+            new_cap_data["state"] = MESIState.INVALID
+            new_cap_data["transient_state"] = None
+            new_cap_data["transient_entered_tick"] = None
+            self.update(Capability(**new_cap_data))
+
+    def enter_transient_state(self, capability_id: UUID, transient_state: TransientState, tick: int):
+        """Set capability into transient state with entry tick."""
+        cap = self.get(capability_id)
+        if cap:
+            new_cap_data = cap.to_dict()
+            new_cap_data["transient_state"] = transient_state
+            new_cap_data["transient_entered_tick"] = tick
+            self.update(Capability(**new_cap_data))
+
+    def clear_transient_state(self, capability_id: UUID):
+        """Clear transient markers after successful resolution."""
+        cap = self.get(capability_id)
+        if cap:
+            new_cap_data = cap.to_dict()
+            new_cap_data["transient_state"] = None
+            new_cap_data["transient_entered_tick"] = None
+            self.update(Capability(**new_cap_data))
+
+    def check_transient_timeouts(self, tick: int):
+        """Apply ADR-005 fail-safe timeout for transient states."""
+        for cap_id, cap in list(self.state.capabilities.items()):
+            if cap.transient_state and cap.transient_entered_tick is not None:
+                if (tick - cap.transient_entered_tick) > self.transient_timeout_ticks:
+                    self.invalidate(cap_id)
+                    if self.metrics_collector is not None:
+                        self.metrics_collector.record_transient_timeout()

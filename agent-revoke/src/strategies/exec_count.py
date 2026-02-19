@@ -1,54 +1,95 @@
-from typing import Dict
-from uuid import UUID
+# Copyright (c) 2026 Prizm contributors.
+"""Execution-count (RCC-like) revocation strategy."""
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from __future__ import annotations
+from typing import TYPE_CHECKING, List, Optional
+
+from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
+from src.core.mesi import MESIState, TransientState, can_act_in_transient
+from src.core.types import Capability
+
+if TYPE_CHECKING:
+    from src.agent.runtime import AgentRuntime
+    from src.core.types import RevocationEvent, ActionRecord
 
 
-class ExecCountBoundedStrategy(RevocationStrategy):
+class ExecCountStrategy(RevocationStrategy):
     """
-    Consistency-directed. RCC acquire pattern (Primer Ch.10 §10.1.4).
-    Agent gets N operations max. Re-validates at Exhausted boundary.
-    Staleness bound: max_operations - operations_at_revocation (in OPS, not time).
-    
-    KILLER DEMO: N=50 → exactly 50 unauthorized ops.
-    Compare: TTL(60s) @ 100ops/sec → up to 6000 unauthorized ops.
+    Release Consistency-directed Coherence (RCC). Agent self-invalidates after a
+    maximum number of operations. It is clock-independent.
     """
-
-    name = "exec_count"
-    coherence_class = "consistency-directed"
+    name: str = "exec_count"
+    coherence_class: CoherenceClass = CoherenceClass.CONSISTENCY_DIRECTED
+    bound_type: BoundType = BoundType.OPERATIONS
 
     def __init__(self, max_operations: int = 50):
         self.max_operations = max_operations
+        self._metrics = StrategyMetrics()
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        # Similar to lazy, the agent finds out upon exhaustion.
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=False,
-            agents_notified=0,
-            agents_acked=0,
-            ticks_elapsed=0,
-            unauthorized_ops_during_propagation=0,
+    def initiate_revocation(self, event: "RevocationEvent", agents: List["AgentRuntime"]) -> None:
+        # Authority can still send an out-of-band revocation.
+        # The generic `on_revocation_received` in AgentRuntime will handle it.
+        pass
+
+    def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
+        """
+        This is the "release" part of the RCC cycle.
+        If the operation count is exhausted, the capability must be re-acquired.
+        """
+        ops_remaining = (
+            capability.max_operations is None or capability.operations_used < capability.max_operations
         )
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+                ops_remaining=ops_remaining,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
 
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        result = agent.attempt_action(resource)
-        if result == ActionResult.EXHAUSTED:
-            agent.sync_capabilities()
-        return result
+        if capability.state == MESIState.INVALID:
+            return ActionResult.DENIED_INVALID
 
-    def get_staleness_bound(self) -> str:
-        return f"N={self.max_operations} ops (vs TTL bound in time)"
+        # The check is `operations_used < max_operations`.
+        # When `operations_used == max_operations`, it's exhausted.
+        if capability.max_operations is not None and capability.operations_used >= capability.max_operations:
+            agent.cache.enter_transient_state(capability.id, TransientState.ISG, agent.clock.now())
+            return ActionResult.EXHAUSTED
+
+        return ActionResult.ALLOWED
+
+    def on_tick(self, agent: "AgentRuntime", tick: int) -> None:
+        pass  # Exec-count strategy is not time-dependent
+
+    def record_action(self, agent: "AgentRuntime", capability: "Capability", action: "ActionRecord") -> None:
+        """Post-action hook: increment counters."""
+        agent.cache.increment_ops(capability.id)
+
+    def revalidate(self, agent: "AgentRuntime", capability: "Capability") -> Optional["Capability"]:
+        """
+        Invalidates the exhausted capability and requests a new one from the authority.
+        """
+        agent.invalidate_capability(capability.id)
+        status = agent.authority.check_capability(agent.agent_id, capability.resource)
+        if not status.get("valid", False):
+            return None
+        new_cap = agent.authority.grant_capability(
+            agent_id=agent.agent_id,
+            resource=capability.resource,
+            scope=capability.scope,
+            max_operations=self.max_operations,
+        )
+        if new_cap:
+            agent.cache.update(new_cap)
+        return new_cap
+
+    def get_metrics(self) -> "StrategyMetrics":
+        return self._metrics
+
+    def get_theoretical_bound(self) -> str:
+        return f"Staleness is bounded by a maximum of {self.max_operations} operations."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

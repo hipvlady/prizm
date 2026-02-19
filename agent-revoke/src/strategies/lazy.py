@@ -1,57 +1,79 @@
-from typing import Dict
-from uuid import UUID
+# Copyright (c) 2026 Prizm contributors.
+"""Lazy consistency-directed revocation strategy."""
 
-from strategies.base import RevocationStrategy, StrategyResult
-from core.types import RevocationEvent, ActionResult, Capability
-from authority.service import AuthorityService
-from agent.runtime import AgentRuntime
+from __future__ import annotations
+from typing import TYPE_CHECKING, List
+
+from .base import RevocationStrategy, CoherenceClass, BoundType, ActionResult, StrategyMetrics
+from src.core.mesi import MESIState, TransientState, can_act_in_transient
+from src.core.types import Capability
+
+if TYPE_CHECKING:
+    from src.agent.runtime import AgentRuntime
+    from src.core.types import RevocationEvent, ActionRecord
 
 
 class LazyInvalidationStrategy(RevocationStrategy):
     """
-    Consistency-directed.
-    Revocation recorded at authority. Agent checks on NEXT action attempt.
-    Staleness bound: network_latency + check_interval.
+    Consistency-Directed. Agent checks with authority on a defined interval ("check-on-use").
+    The authority does not push revocations; the agent pulls validity information.
     """
+    name: str = "lazy"
+    coherence_class: CoherenceClass = CoherenceClass.CONSISTENCY_DIRECTED
+    bound_type: BoundType = BoundType.TIME
 
-    name = "lazy"
-    coherence_class = "consistency-directed"
-
-    def __init__(self, check_interval_ticks: int = 10):
+    def __init__(self, check_interval_ticks: int = 100):
         self.check_interval_ticks = check_interval_ticks
-        self.last_check: Dict[UUID, int] = {}
+        self._metrics = StrategyMetrics()
 
-    def on_revocation_issued(
-        self,
-        event: RevocationEvent,
-        authority: AuthorityService,
-        agents: Dict[UUID, AgentRuntime],
-    ) -> StrategyResult:
-        # In lazy strategy, we just record the revocation at the authority.
-        # The agents will find out on their next action attempt.
-        return StrategyResult(
-            strategy=self.name,
-            propagation_complete=False,
-            agents_notified=0,
-            agents_acked=0,
-            ticks_elapsed=0,
-            unauthorized_ops_during_propagation=0,
-        )
+    def initiate_revocation(self, event: "RevocationEvent", agents: List["AgentRuntime"]) -> None:
+        # In Lazy mode, the authority doesn't push revocations to agents.
+        # This method is part of the ABC but is a no-op for lazy strategy.
+        pass
 
-    def on_action_attempt(
-        self,
-        agent: AgentRuntime,
-        resource: str,
-        capability: Capability,
-    ) -> ActionResult:
-        now = agent.clock.now()
-        last_check_tick = self.last_check.get(agent.agent_id, 0)
+    def validate_action(self, agent: "AgentRuntime", capability: "Capability") -> ActionResult:
+        """On action, check if the revalidation interval has passed."""
+        if capability.transient_state is not None:
+            allowed = can_act_in_transient(
+                capability.transient_state,
+                self.name,
+                is_write="write" in capability.resource,
+            )
+            if not allowed:
+                return ActionResult.DENIED_TRANSIENT
 
-        if now - last_check_tick >= self.check_interval_ticks:
-            agent.sync_capabilities()
-            self.last_check[agent.agent_id] = now
+        if agent.clock.now() - agent.cache.state.last_sync_tick > self.check_interval_ticks:
+            # Time to revalidate. Enter a transient state.
+            agent.cache.enter_transient_state(capability.id, TransientState.ISG, agent.clock.now())
+            return ActionResult.PENDING_VALIDATION
+        
+        if capability.state == MESIState.INVALID:
+            return ActionResult.DENIED_INVALID
+            
+        return ActionResult.ALLOWED
 
-        return agent.attempt_action(resource)
+    def on_tick(self, agent: "AgentRuntime", tick: int) -> None:
+        """Periodically re-validate capabilities based on the interval."""
+        if tick - agent.cache.state.last_sync_tick > self.check_interval_ticks:
+            for cap_id in list(agent.cache.state.capabilities.keys()):
+                cap = agent.cache.get(cap_id)
+                if cap and cap.state != MESIState.INVALID:
+                    agent.cache.enter_transient_state(cap.id, TransientState.ISG, tick)
+                    status = agent.authority.check_capability(agent.agent_id, cap.resource)
+                    if status.get("valid", False):
+                        agent.cache.clear_transient_state(cap.id)
+                    else:
+                        agent.invalidate_capability(cap.id)
+            agent.cache.state.last_sync_tick = tick
 
-    def get_staleness_bound(self) -> str:
-        return f"check_interval ({self.check_interval_ticks} ticks)"
+    def record_action(self, agent: "AgentRuntime", capability: "Capability", action: "ActionRecord") -> None:
+        pass  # No specific recording logic for lazy
+
+    def get_metrics(self) -> "StrategyMetrics":
+        return self._metrics
+
+    def get_theoretical_bound(self) -> str:
+        return f"Staleness window is at most {self.check_interval_ticks} ticks."
+
+    def get_transient_state_duration(self) -> dict[str, float]:
+        return self._metrics.transient_state_durations

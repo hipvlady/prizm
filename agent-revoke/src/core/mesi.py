@@ -1,52 +1,123 @@
-from dataclasses import dataclass
-from uuid import UUID
+# Copyright (c) 2026 Prizm contributors.
+"""MESI stable and transient states with transition validation."""
 
-from core.types import MESIState, MESITransitionError, TransientState
+from __future__ import annotations
 
-TRANSITION_TABLE: dict[tuple[MESIState, str], MESIState] = {
-    (MESIState.INVALID, "grant_exclusive"): MESIState.EXCLUSIVE,
-    (MESIState.INVALID, "grant_shared"): MESIState.SHARED,
-    (MESIState.EXCLUSIVE, "acquire_shared"): MESIState.SHARED,
-    (MESIState.EXCLUSIVE, "write_hit"): MESIState.MODIFIED,
-    (MESIState.EXCLUSIVE, "read_hit"): MESIState.EXCLUSIVE,
-    (MESIState.EXCLUSIVE, "revoke"): MESIState.INVALID,
-    (MESIState.EXCLUSIVE, "ttl_expired"): MESIState.INVALID,
-    (MESIState.EXCLUSIVE, "count_exhausted"): MESIState.INVALID,
-    (MESIState.SHARED, "invalidate"): MESIState.INVALID,
-    (MESIState.SHARED, "write_hit"): MESIState.MODIFIED,
-    (MESIState.SHARED, "read_hit"): MESIState.SHARED,
-    (MESIState.SHARED, "revoke"): MESIState.INVALID,
-    (MESIState.SHARED, "ttl_expired"): MESIState.INVALID,
-    (MESIState.SHARED, "count_exhausted"): MESIState.INVALID,
-    (MESIState.MODIFIED, "write_hit"): MESIState.MODIFIED,
-    (MESIState.MODIFIED, "read_hit"): MESIState.MODIFIED,
-    (MESIState.MODIFIED, "revoke"): MESIState.INVALID,
-    (MESIState.MODIFIED, "ttl_expired"): MESIState.INVALID,
-    (MESIState.MODIFIED, "count_exhausted"): MESIState.INVALID,
+from enum import Enum
+from typing import Set, Tuple
+
+
+class MESIState(Enum):
+    """Stable MESI states for capability coherence."""
+
+    MODIFIED = "Modified"
+    EXCLUSIVE = "Exclusive"
+    SHARED = "Shared"
+    INVALID = "Invalid"
+
+
+class TransientState(Enum):
+    """Transient MESI states using XYZ transition notation."""
+
+    ISG = "Invalid-to-Shared-waiting-Grant"
+    IED = "Invalid-to-Exclusive-waiting-Delegation"
+    EIA = "Exclusive-to-Invalid-waiting-Ack"
+    SIA = "Shared-to-Invalid-waiting-Ack"
+    MIC = "Modified-to-Invalid-waiting-Cascade"
+    MIA = "Modified-to-Invalid-waiting-Ack"
+
+
+VALID_TRANSITIONS: Set[Tuple[MESIState, MESIState]] = {
+    (MESIState.INVALID, MESIState.SHARED),
+    (MESIState.INVALID, MESIState.EXCLUSIVE),
+    (MESIState.SHARED, MESIState.INVALID),
+    (MESIState.SHARED, MESIState.EXCLUSIVE),
+    (MESIState.EXCLUSIVE, MESIState.SHARED),
+    (MESIState.EXCLUSIVE, MESIState.MODIFIED),
+    (MESIState.EXCLUSIVE, MESIState.INVALID),
+    (MESIState.MODIFIED, MESIState.INVALID),
+    (MESIState.MODIFIED, MESIState.SHARED),
 }
 
 
-def transition(current: MESIState, event: str) -> MESIState:
-    """Raises MESITransitionError for invalid transitions."""
-    if (current, event) not in TRANSITION_TABLE:
-        raise MESITransitionError(current, MESIState.INVALID, f"No transition for event '{event}'")
-    return TRANSITION_TABLE[(current, event)]
+class InvalidTransitionError(ValueError):
+    """Raised when an invalid stable-state transition is attempted."""
+
+    def __init__(self, current_state: MESIState, next_state: MESIState):
+        super().__init__(f"Invalid MESI transition: {current_state.value} -> {next_state.value}")
+        self.current_state = current_state
+        self.next_state = next_state
 
 
-def can_transition(current: MESIState, event: str) -> bool:
-    return (current, event) in TRANSITION_TABLE
+def is_valid_transition(current_state: MESIState, next_state: MESIState) -> bool:
+    """Validate whether a stable-state transition is allowed.
+
+    Parameters
+    ----------
+    current_state : MESIState
+        Source stable state.
+    next_state : MESIState
+        Target stable state.
+
+    Returns
+    -------
+    bool
+        ``True`` when transition is valid.
+    """
+    return (current_state, next_state) in VALID_TRANSITIONS
 
 
-def is_valid_state(state: MESIState) -> bool:
-    return isinstance(state, MESIState)
+def transition_state(current_state: MESIState, next_state: MESIState) -> MESIState:
+    """Validate and perform a stable MESI transition.
+
+    Raises
+    ------
+    InvalidTransitionError
+        If transition is not part of ``VALID_TRANSITIONS``.
+    """
+    if not is_valid_transition(current_state, next_state):
+        raise InvalidTransitionError(current_state, next_state)
+    return next_state
 
 
-@dataclass
-class TransientCapability:
-    capability_id: UUID
-    from_state: MESIState
-    to_state: MESIState
-    waiting_for: str  # "ACK", "LEASE_EXPIRY", "COUNT_BOUNDARY"
-    transient_state: TransientState
-    tick_entered: float
-    timeout_ticks: int = 100
+def can_act_in_transient(
+    transient_state: TransientState,
+    strategy_name: str,
+    is_write: bool,
+    *,
+    lease_valid: bool = True,
+    ops_remaining: bool = True,
+) -> bool:
+    """Evaluate whether an action is permitted in a transient state.
+
+    Parameters
+    ----------
+    transient_state : TransientState
+        Current transient state.
+    strategy_name : str
+        Strategy identifier (`eager`, `lazy`, `lease`, `exec_count`).
+    is_write : bool
+        Whether the action is a write operation.
+    lease_valid : bool, optional
+        Lease validity signal for lease strategy.
+    ops_remaining : bool, optional
+        Operation budget signal for exec-count strategy.
+    """
+    if transient_state in {TransientState.ISG, TransientState.IED}:
+        return False
+
+    if transient_state in {TransientState.EIA, TransientState.SIA}:
+        if strategy_name == "eager":
+            return False
+        if strategy_name == "lazy":
+            return True
+        if strategy_name == "lease":
+            return lease_valid
+        if strategy_name == "exec_count":
+            return ops_remaining
+        return False
+
+    if transient_state in {TransientState.MIC, TransientState.MIA}:
+        return not is_write
+
+    return False

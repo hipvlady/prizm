@@ -1,17 +1,31 @@
-scenario: crm-bulk-ops
-description: "High-velocity CRM agent — exec-count vs TTL comparison"
-strategies: [exec_count, lease]
-agents: 3
-delegation_depth: 1
-operations_per_second: 100
-simulation_ticks: 700
-credentials:
-  exec_count_max_operations: 50
-  lease_ttl_ticks: 600
-revocation:
-  trigger_at_tick: 50
-  reason: EXPLICIT
-  cascade: true
-expected_outcome:
-  exec_count_unauthorized_ops: 50
-  lease_unauthorized_ops: 6000
+# Scenario 2: CRM High-Velocity Agent
+# Business Context: A sales agent performing 100 API calls/sec has its credentials leaked.
+# Shows: The superiority of 'exec-count' in bounding damage vs. a time-based 'lease' (TTL).
+# Key Metric: unauthorized_actions_count
+
+simulation:
+  duration_ticks: 120
+  agents: 1
+  actions_per_tick: 100 # Deterministic high velocity workload
+  seed: 42
+  latency_ticks: 5
+  transient_timeout_ticks: 100
+
+scenario:
+  name: "CRM High-Velocity Agent"
+  delegation_depth: 1 # Single powerful agent
+  cascade_revocation: false
+  revocation_trigger_tick: 0 # Revoke immediately to measure bounded post-revoke damage
+
+strategies:
+  lazy:
+    check_interval_ticks: 23 # Approx. 2300 unauthorized ops at 100 ops/tick
+  lease:
+    default_ttl_ticks: 60 # 60-tick TTL => ~6000 unauthorized ops at 100 ops/tick
+  exec_count:
+    max_operations: 50 # The key bound for this scenario
+
+trust:
+  initial_score: 0.8
+  anomaly_threshold: 0.4
+  score_decay_on_anomaly: 0.3

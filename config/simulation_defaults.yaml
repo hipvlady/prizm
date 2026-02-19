@@ -1,0 +1,34 @@
+# Canonical simulation config derived from research (Spec §2.4.1)
+
+network:
+  redis_pubsub_ms: 0.1          # local intra-cloud pub/sub
+  kafka_ms: 10                  # durable log baseline
+  oso_replica_lag_ms_p99: 1000  # max observed lag
+  opa_bundle_lag_worst_case_s: 420  # 5-min server + 2-min pull
+  ocsp_introspection_ms: 20     # current CDN-served P50
+  webhook_p99_alert_threshold_s: 30  # monitoring trigger
+  eager_revalidation_ms: 25     # OPA remote / OAuth introspection P50
+  lazy_cache_validation_ms: 1   # OPA local eval / sub-millisecond
+
+strategies:
+  lease:
+    spiffe_jwt_svid_ttl_s: 300      # 5 min default
+    spiffe_x509_svid_ttl_s: 21600   # 6 hours
+    standard_access_token_ttl_s: 3600   # Azure/Okta default
+    aws_sts_default_ttl_s: 3600         # AssumeRole default
+    aws_sts_minimum_ttl_s: 900          # 15 min minimum
+
+  exec_count:
+    lambda_max_tps: 10000
+    banking_bound: 10             # high-risk, low-count operations
+    crm_bound: 50                 # bulk operations scenario
+    anomaly_trigger_bound: 100    # auto-revoke scenario
+
+narrative_baseline:
+  crl_update_max_hours: 168      # 7 days worst case
+  crl_update_typical_hours: 24
+  ocsp_latency_2012_ms: 291      # historical
+  ocsp_latency_now_ms: 20        # current
+
+performance_ratio:
+  eager_vs_lazy_cost: "25-50x"   # eager revalidation ~25-50× more expensive per auth check
