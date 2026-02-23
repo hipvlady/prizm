@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggregated Comparison: {{ scenario }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        main { padding: 1rem 0; }
+        .zero-std { color: var(--pico-ins-color, green); font-weight: bold; }
+        .methodology { background: var(--pico-card-background-color); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Aggregated Strategy Comparison</h1>
+        <p><strong>Scenario:</strong> <code>{{ scenario }}</code></p>
+
+        <div class="methodology">
+            <strong>Methodology:</strong> {{ num_runs }} runs per strategy,
+            seeds {{ seed_range }}, population std dev (pstdev).
+        </div>
+
+        <h3>Strategy Comparison (mean &plusmn; &sigma;)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Unauthorised Ops</th>
+                    <th>Staleness Max</th>
+                    <th>P50 Latency</th>
+                    <th>P99 Latency</th>
+                    <th>Convergence</th>
+                    <th>Messages</th>
+                    <th>Revalidations</th>
+                    <th>Bound Violations</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comparison_rows %}
+                <tr>
+                    <td><code>{{ row.strategy }}</code></td>
+                    <td{% if row.unauthorized_std == 0 %} class="zero-std"{% endif %}>{{ row.unauthorized }}</td>
+                    <td{% if row.staleness_std == 0 %} class="zero-std"{% endif %}>{{ row.staleness }}</td>
+                    <td>{{ row.p50 }}</td>
+                    <td>{{ row.p99 }}</td>
+                    <td>{{ row.convergence }}</td>
+                    <td>{{ row.messages }}</td>
+                    <td>{{ row.revalidations }}</td>
+                    <td>{{ row.bound_violations }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if depth_rows %}
+        <h3>Per-Depth Unauthorised Operations (mean &plusmn; &sigma;)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Depth</th>
+                    {% for s in strategies %}
+                    <th>{{ s }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in depth_rows %}
+                <tr>
+                    <td>{{ row.depth }}</td>
+                    {% for s in strategies %}
+                    <td>{{ row.values[s] }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <h3>Unauthorised Operations by Strategy</h3>
+        <canvas id="metricsChart" width="600" height="300"></canvas>
+
+        {% if clock_rows %}
+        <h3>Clock Dependence</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Clock-Dependent?</th>
+                    <th>Robustness</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in clock_rows %}
+                <tr>
+                    <td>{{ row.strategy }}</td>
+                    <td>{{ row.clock_dependent }}</td>
+                    <td>{{ row.robustness }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <script>
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: {{ chart_labels | tojson }},
+                    datasets: [{
+                        label: 'Unauthorised Ops (mean)',
+                        data: {{ chart_means | tojson }},
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    }]
+                },
+                options: {
+                    plugins: {
+                        title: { display: true, text: 'Unauthorised Operations (mean, {{ num_runs }} runs)' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+                    }
+                }
+            });
+        </script>
+    </main>
+</body>
+</html>
