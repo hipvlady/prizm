@@ -119,6 +119,93 @@ def generate_strategy_comparison_report(metrics_list, template_dir: str = "src/o
     )
 
 
+def generate_aggregated_comparison_report(
+    aggregated_list,
+    template_dir: str = "src/output/templates",
+):
+    """Generate a multi-strategy comparison report with mean +/- sigma.
+
+    Parameters
+    ----------
+    aggregated_list : list[AggregatedMetrics]
+        Aggregated metrics per strategy.
+    template_dir : str, optional
+        Template directory path.
+
+    Returns
+    -------
+    str
+        Rendered HTML string.
+    """
+    env = Environment(loader=FileSystemLoader(template_dir))
+    template = env.get_template("aggregated_comparison.html")
+
+    scenario = aggregated_list[0].scenario if aggregated_list else "comparison"
+    num_runs = aggregated_list[0].num_runs if aggregated_list else 0
+    seed_range = aggregated_list[0].seed_range if aggregated_list else ""
+    strategies = [a.strategy for a in aggregated_list]
+
+    def _fmt(mean: float, std: float) -> str:
+        if std == 0:
+            return f"{mean:.1f} \u00b1 0"
+        return f"{mean:.1f} \u00b1 {std:.1f}"
+
+    comparison_rows = [
+        {
+            "strategy": a.strategy,
+            "unauthorized": _fmt(a.unauthorized_ops_mean, a.unauthorized_ops_std),
+            "unauthorized_std": a.unauthorized_ops_std,
+            "staleness": _fmt(a.staleness_max_mean, a.staleness_max_std),
+            "staleness_std": a.staleness_max_std,
+            "p50": _fmt(a.latency_p50_mean, a.latency_p50_std),
+            "p99": _fmt(a.latency_p99_mean, a.latency_p99_std),
+            "convergence": _fmt(a.convergence_mean, a.convergence_std),
+            "messages": _fmt(a.messages_mean, a.messages_std),
+            "revalidations": _fmt(a.revalidation_mean, a.revalidation_std),
+            "bound_violations": a.total_bound_violations,
+        }
+        for a in aggregated_list
+    ]
+
+    # Per-depth rows
+    all_depths: set[int] = set()
+    for a in aggregated_list:
+        all_depths.update(a.unauthorized_by_depth_mean.keys())
+
+    depth_rows = [
+        {
+            "depth": d,
+            "values": {
+                a.strategy: _fmt(
+                    a.unauthorized_by_depth_mean.get(d, 0.0),
+                    a.unauthorized_by_depth_std.get(d, 0.0),
+                )
+                for a in aggregated_list
+            },
+        }
+        for d in sorted(all_depths)
+    ]
+
+    clock_rows = [
+        {"strategy": "eager", "clock_dependent": "No", "robustness": "High"},
+        {"strategy": "lazy", "clock_dependent": "No", "robustness": "High"},
+        {"strategy": "lease", "clock_dependent": "Yes", "robustness": "Fragile"},
+        {"strategy": "exec_count", "clock_dependent": "No", "robustness": "High"},
+    ]
+
+    return template.render(
+        scenario=scenario,
+        num_runs=num_runs,
+        seed_range=seed_range,
+        strategies=strategies,
+        chart_labels=strategies,
+        chart_means=[a.unauthorized_ops_mean for a in aggregated_list],
+        comparison_rows=comparison_rows,
+        depth_rows=depth_rows,
+        clock_rows=clock_rows,
+    )
+
+
 def save_report(report_html: str, output_path):
     """Persist an HTML report to file.
 

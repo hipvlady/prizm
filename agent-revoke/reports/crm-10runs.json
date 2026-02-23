@@ -1,0 +1,181 @@
+{
+  "methodology": {
+    "runs_per_config": 10,
+    "seed_range": "0-9",
+    "std_type": "population (pstdev)"
+  },
+  "results": [
+    {
+      "scenario": "scenarios/crm-bulk-ops.yaml",
+      "strategy": "eager",
+      "unauthorized_ops": {
+        "mean": 500.0,
+        "std": 0.0
+      },
+      "staleness_max": {
+        "mean": 5.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 5.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 5.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 5,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 2.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.13401109802071004,
+        "std": 0.015907426179613632
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 500.0,
+          "std": 0.0
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/crm-bulk-ops.yaml",
+      "strategy": "lazy",
+      "unauthorized_ops": {
+        "mean": 2400.0,
+        "std": 0.0
+      },
+      "staleness_max": {
+        "mean": 24.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 2.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.14327170371543616,
+        "std": 0.024559481421528816
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 2400.0,
+          "std": 0.0
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/crm-bulk-ops.yaml",
+      "strategy": "lease",
+      "unauthorized_ops": {
+        "mean": 6000.0,
+        "std": 0.0
+      },
+      "staleness_max": {
+        "mean": 60.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 2.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.1754111597139854,
+        "std": 0.02122513730757012
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 6000.0,
+          "std": 0.0
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/crm-bulk-ops.yaml",
+      "strategy": "exec_count",
+      "unauthorized_ops": {
+        "mean": 50.0,
+        "std": 0.0
+      },
+      "staleness_max": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.12613381140399724,
+        "std": 0.014614131391264133
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 50.0,
+          "std": 0.0
+        }
+      },
+      "bound_violations": 0
+    }
+  ]
+}

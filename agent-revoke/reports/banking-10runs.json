@@ -1,0 +1,213 @@
+{
+  "methodology": {
+    "runs_per_config": 10,
+    "seed_range": "0-9",
+    "std_type": "population (pstdev)"
+  },
+  "results": [
+    {
+      "scenario": "scenarios/banking-cascade.yaml",
+      "strategy": "eager",
+      "unauthorized_ops": {
+        "mean": 14.9,
+        "std": 3.2388269481403293
+      },
+      "staleness_max": {
+        "mean": 10.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 10,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 10,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 10,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 3.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.019368647487135605,
+        "std": 0.002783307065167244
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 5.4,
+          "std": 1.42828568570857
+        },
+        "1": {
+          "mean": 4.7,
+          "std": 1.1
+        },
+        "2": {
+          "mean": 4.8,
+          "std": 1.7776388834631178
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/banking-cascade.yaml",
+      "strategy": "lazy",
+      "unauthorized_ops": {
+        "mean": 35.3,
+        "std": 2.9
+      },
+      "staleness_max": {
+        "mean": 23.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 3.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.03173596258857288,
+        "std": 0.03259736749785165
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 12.3,
+          "std": 2.0518284528683193
+        },
+        "1": {
+          "mean": 11.6,
+          "std": 1.6852299546352718
+        },
+        "2": {
+          "mean": 11.4,
+          "std": 2.4576411454889016
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/banking-cascade.yaml",
+      "strategy": "lease",
+      "unauthorized_ops": {
+        "mean": 29.9,
+        "std": 2.5865034312755126
+      },
+      "staleness_max": {
+        "mean": 20.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 3.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.02304568250547163,
+        "std": 0.0031265186787368462
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 10.7,
+          "std": 1.7349351572897473
+        },
+        "1": {
+          "mean": 9.8,
+          "std": 1.5362291495737217
+        },
+        "2": {
+          "mean": 9.4,
+          "std": 2.244994432064365
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/banking-cascade.yaml",
+      "strategy": "exec_count",
+      "unauthorized_ops": {
+        "mean": 32.3,
+        "std": 13.023440405668541
+      },
+      "staleness_max": {
+        "mean": 37.0,
+        "std": 21.568495543268657
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 3.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 3.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.023999874806031586,
+        "std": 0.002681359226410329
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 12.4,
+          "std": 13.275541420220872
+        },
+        "1": {
+          "mean": 11.5,
+          "std": 4.341658669218482
+        },
+        "2": {
+          "mean": 8.4,
+          "std": 5.2
+        }
+      },
+      "bound_violations": 0
+    }
+  ]
+}

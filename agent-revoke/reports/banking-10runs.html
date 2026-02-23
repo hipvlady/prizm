@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggregated Comparison: scenarios/banking-cascade.yaml</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        main { padding: 1rem 0; }
+        .zero-std { color: var(--pico-ins-color, green); font-weight: bold; }
+        .methodology { background: var(--pico-card-background-color); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Aggregated Strategy Comparison</h1>
+        <p><strong>Scenario:</strong> <code>scenarios/banking-cascade.yaml</code></p>
+
+        <div class="methodology">
+            <strong>Methodology:</strong> 10 runs per strategy,
+            seeds 0-9, population std dev (pstdev).
+        </div>
+
+        <h3>Strategy Comparison (mean &plusmn; &sigma;)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Unauthorised Ops</th>
+                    <th>Staleness Max</th>
+                    <th>P50 Latency</th>
+                    <th>P99 Latency</th>
+                    <th>Convergence</th>
+                    <th>Messages</th>
+                    <th>Revalidations</th>
+                    <th>Bound Violations</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td><code>eager</code></td>
+                    <td>14.9 ± 3.2</td>
+                    <td class="zero-std">10.0 ± 0</td>
+                    <td>10.0 ± 0</td>
+                    <td>10.0 ± 0</td>
+                    <td>10.0 ± 0</td>
+                    <td>3.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0</td>
+                </tr>
+                
+                <tr>
+                    <td><code>lazy</code></td>
+                    <td>35.3 ± 2.9</td>
+                    <td class="zero-std">23.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>3.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0</td>
+                </tr>
+                
+                <tr>
+                    <td><code>lease</code></td>
+                    <td>29.9 ± 2.6</td>
+                    <td class="zero-std">20.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>3.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0</td>
+                </tr>
+                
+                <tr>
+                    <td><code>exec_count</code></td>
+                    <td>32.3 ± 13.0</td>
+                    <td>37.0 ± 21.6</td>
+                    <td>0.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>0.0 ± 0</td>
+                    <td>3.0 ± 0</td>
+                    <td>3.0 ± 0</td>
+                    <td>0</td>
+                </tr>
+                
+            </tbody>
+        </table>
+
+        
+        <h3>Per-Depth Unauthorised Operations (mean &plusmn; &sigma;)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Depth</th>
+                    
+                    <th>eager</th>
+                    
+                    <th>lazy</th>
+                    
+                    <th>lease</th>
+                    
+                    <th>exec_count</th>
+                    
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>0</td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                </tr>
+                
+                <tr>
+                    <td>1</td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                </tr>
+                
+                <tr>
+                    <td>2</td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                    <td></td>
+                    
+                </tr>
+                
+            </tbody>
+        </table>
+        
+
+        <h3>Unauthorised Operations by Strategy</h3>
+        <canvas id="metricsChart" width="600" height="300"></canvas>
+
+        
+        <h3>Clock Dependence</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Clock-Dependent?</th>
+                    <th>Robustness</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>eager</td>
+                    <td>No</td>
+                    <td>High</td>
+                </tr>
+                
+                <tr>
+                    <td>lazy</td>
+                    <td>No</td>
+                    <td>High</td>
+                </tr>
+                
+                <tr>
+                    <td>lease</td>
+                    <td>Yes</td>
+                    <td>Fragile</td>
+                </tr>
+                
+                <tr>
+                    <td>exec_count</td>
+                    <td>No</td>
+                    <td>High</td>
+                </tr>
+                
+            </tbody>
+        </table>
+        
+
+        <script>
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ["eager", "lazy", "lease", "exec_count"],
+                    datasets: [{
+                        label: 'Unauthorised Ops (mean)',
+                        data: [14.9, 35.3, 29.9, 32.3],
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    }]
+                },
+                options: {
+                    plugins: {
+                        title: { display: true, text: 'Unauthorised Operations (mean, 10 runs)' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+                    }
+                }
+            });
+        </script>
+    </main>
+</body>
+</html>
