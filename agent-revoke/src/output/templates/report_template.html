@@ -91,7 +91,7 @@
                 <tr>
                     <td>{{ row.depth }}</td>
                     {% for label in chart_labels %}
-                    <td>{{ row.counts.get(label, 0) }}</td>
+                    <td>{{ row.counts[label] | default(0) }}</td>
                     {% endfor %}
                 </tr>
                 {% endfor %}
