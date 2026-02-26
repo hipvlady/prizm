@@ -1,5 +1,12 @@
 import pytest
-from src.core.mesi import MESIState, is_valid_transition
+from src.core.mesi import (
+    InvalidTransitionError,
+    MESIState,
+    TransientState,
+    can_act_in_transient,
+    is_valid_transition,
+    transition_state,
+)
 
 # Test cases for valid transitions
 @pytest.mark.parametrize("from_state, to_state", [
@@ -35,3 +42,32 @@ def test_invalid_transitions(from_state, to_state):
     Tests that the MESI state machine rejects invalid transitions.
     """
     assert is_valid_transition(from_state, to_state) is False
+
+
+def test_transition_state_raises_on_invalid_transition():
+    with pytest.raises(InvalidTransitionError):
+        transition_state(MESIState.INVALID, MESIState.MODIFIED)
+
+
+@pytest.mark.parametrize(
+    "strategy_name, lease_valid, ops_remaining, expected",
+    [
+        ("eager", True, True, False),
+        ("lazy", True, True, True),
+        ("lease", False, True, False),
+        ("lease", True, True, True),
+        ("exec_count", True, False, False),
+        ("exec_count", True, True, True),
+    ],
+)
+def test_transient_invalidation_action_gate(strategy_name, lease_valid, ops_remaining, expected):
+    assert (
+        can_act_in_transient(
+            TransientState.EIA,
+            strategy_name,
+            is_write=False,
+            lease_valid=lease_valid,
+            ops_remaining=ops_remaining,
+        )
+        is expected
+    )

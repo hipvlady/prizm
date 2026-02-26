@@ -3,6 +3,7 @@ from uuid import uuid4
 from collections import deque
 
 from src.core.clock import LogicalClock
+from src.core.mesi import MESIState
 from src.core.types import RevocationReason, ScopeAttenuationError, ActionRecord, ActionResult
 from src.authority.registry import CapabilityRegistry
 from src.authority.broadcaster import RevocationBroadcaster
@@ -133,3 +134,25 @@ def test_trust_scorer_anomaly_detection(authority_components):
             authorized=False, result=result, delegation_depth=0
         ))
     assert trust_scorer.check_anomaly(agent_id, action_history_denials) is True
+
+
+def test_revoke_enforces_swmr_for_agent_resource(authority_components):
+    """Revoking one capability invalidates sibling lines for the same agent/resource pair."""
+    authority, registry, message_bus, clock, _ = authority_components
+    agent_id = uuid4()
+
+    first = authority.grant_capability(agent_id=agent_id, resource="shared:record", scope=["read"])
+    clock.advance()
+    sibling = authority.grant_capability(agent_id=agent_id, resource="shared:record", scope=["read"])
+
+    event = authority.revoke_capability(first.id, RevocationReason.EXPLICIT, cascade=False)
+
+    refreshed_first = registry.get(first.id)
+    refreshed_sibling = registry.get(sibling.id)
+    assert refreshed_first is not None
+    assert refreshed_sibling is not None
+    assert refreshed_first.state == MESIState.INVALID
+    assert refreshed_sibling.state == MESIState.INVALID
+    assert event.expected_capabilities == {first.id, sibling.id}
+    assert len(message_bus) == 1
+    assert message_bus[0]["recipient"] == agent_id
