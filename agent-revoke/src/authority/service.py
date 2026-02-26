@@ -133,7 +133,12 @@ class AuthorityService:
         return cap
 
     def revoke_capability(
-        self, capability_id: UUID, reason: RevocationReason, cascade: bool = False
+        self,
+        capability_id: UUID,
+        reason: RevocationReason,
+        cascade: bool = False,
+        *,
+        completion_semantics: str = "push",
     ) -> RevocationEvent:
         """Revoke a capability and optionally cascade through descendants.
 
@@ -145,6 +150,8 @@ class AuthorityService:
             Revocation reason.
         cascade : bool, optional
             Whether to revoke descendants, by default ``False``.
+        completion_semantics : str, optional
+            Revocation completion mode tag (``push``, ``pull_eventual``, or ``mixed``).
 
         Returns
         -------
@@ -163,6 +170,7 @@ class AuthorityService:
             issued_tick=self.clock.now(),
             root_capability_id=capability_id,
             cascade=cascade,
+            completion_semantics=completion_semantics,
         )
 
         cap = self.registry.get(capability_id)
@@ -354,15 +362,24 @@ class AuthorityService:
         Returns
         -------
         dict
-            Event status payload.
+            Event status payload with delivery and local-completion phases.
         """
         pending_count = self.monitor.get_pending_ack_count(event_id)
+        expected_capabilities = self.monitor.get_expected_capabilities(event_id)
+        invalidated_capabilities = self.monitor.get_invalidated_capabilities(event_id)
+        cascade_completion_tick = self.monitor.get_cascade_completion_tick(event_id)
+        delivery_completion_tick = self.monitor.get_delivery_completion_tick(event_id)
         return {
             "event_id": event_id,
+            "completion_semantics": self.monitor.get_completion_semantics(event_id),
             "pending_acks": pending_count,
             "propagated": self.monitor.get_propagation_map(event_id),
             "cascade_completeness_ratio": self.monitor.get_cascade_completeness_ratio(event_id),
-            "cascade_completion_tick": self.monitor.get_cascade_completion_tick(event_id),
-            "expected_capabilities": self.monitor.get_expected_capabilities(event_id),
-            "invalidated_capabilities": self.monitor.get_invalidated_capabilities(event_id),
+            "delivery_completion_tick": delivery_completion_tick,
+            "delivery_complete": pending_count == 0,
+            "cascade_completion_tick": cascade_completion_tick,
+            "local_cascade_complete": cascade_completion_tick is not None,
+            "expected_capabilities": expected_capabilities,
+            "invalidated_capabilities": invalidated_capabilities,
+            "pending_capabilities": len(expected_capabilities - invalidated_capabilities),
         }

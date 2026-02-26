@@ -57,17 +57,26 @@ class ConsistencyMonitor:
             TimelineEntry(tick=event.issued_tick, event="broadcast", capability_id=event.capability_id)
         )
 
-    def record_agent_ack(self, agent_id: UUID, event_id: UUID, current_tick: int) -> None:
+    def record_agent_ack(
+        self,
+        agent_id: UUID,
+        event_id: UUID,
+        current_tick: int,
+        *,
+        ack_event: str = "ack",
+    ) -> None:
         """Register recipient ACK and close event once all ACKs are received."""
         if event_id in self._pending_events:
             monitored = self._pending_events[event_id]
             monitored.agents_to_notify.discard(agent_id)
             self._event_traces.setdefault(event_id, []).append(
-                TimelineEntry(tick=current_tick, event="ack", agent_id=agent_id)
+                TimelineEntry(tick=current_tick, event=ack_event, agent_id=agent_id)
             )
             if not monitored.agents_to_notify:
                 latency = current_tick - monitored.event.issued_tick
                 self._convergence_latencies.append(latency)
+                if monitored.event.delivery_completion_tick is None:
+                    object.__setattr__(monitored.event, "delivery_completion_tick", current_tick)
                 self._completed_events[event_id] = monitored
                 del self._pending_events[event_id]
 
@@ -223,6 +232,22 @@ class ConsistencyMonitor:
             return self._pending_events[event_id].event.cascade_completion_tick
         if event_id in self._completed_events:
             return self._completed_events[event_id].event.cascade_completion_tick
+        return None
+
+    def get_delivery_completion_tick(self, event_id: UUID) -> int | None:
+        """Return tick when all recipients observed the revocation event."""
+        if event_id in self._pending_events:
+            return self._pending_events[event_id].event.delivery_completion_tick
+        if event_id in self._completed_events:
+            return self._completed_events[event_id].event.delivery_completion_tick
+        return None
+
+    def get_completion_semantics(self, event_id: UUID) -> str | None:
+        """Return event completion semantics (`push`, `pull_eventual`, or `mixed`)."""
+        if event_id in self._pending_events:
+            return self._pending_events[event_id].event.completion_semantics
+        if event_id in self._completed_events:
+            return self._completed_events[event_id].event.completion_semantics
         return None
 
     def get_cascade_completion_latencies(self) -> List[int]:

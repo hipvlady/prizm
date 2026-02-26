@@ -74,4 +74,6 @@ python scripts/run_strategy_comparison.py \
 
 - CRM scenario is deterministic (`actions_per_tick=100`, fixed seed).
 - Banking and anomaly scenarios may vary with stochastic action scheduling.
-- Cascade completeness metric currently reflects push-invalidation acknowledgement path; consistency-directed strategies rely on pull/check semantics.
+- Cascade status is two-phase:
+  - delivery completion (`delivery_completion_tick`) means all recipients observed revoke,
+  - local completion (`cascade_completion_tick`) means all expected local capabilities invalidated.

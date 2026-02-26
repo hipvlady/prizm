@@ -58,19 +58,22 @@ Domain-specific failures:
 
 `RevocationEvent` tracks:
 
+- `completion_semantics`
+- `delivery_completion_tick`
 - `expected_capabilities`
 - `invalidated_capabilities`
 - `cascade_completion_tick`
 
-This gives machine-readable evidence for cascade progress in push paths.
+This gives machine-readable evidence for two phases:
+
+- delivery completion: all notified agents observed the revocation event,
+- local completion: all expected local capabilities are invalidated.
 
 ## Strategy Semantics (Current)
 
-- `eager`: push invalidation accepted immediately at agent runtime (`accepts_push_revocation=True`).
-- `lazy`, `lease`, `exec_count`: consistency-directed and action-time checked.
+- `eager`: push invalidation on receipt (`accepts_push_revocation=True`).
+- `lazy`, `lease`, `exec_count`: pull/check semantics; receipt is acknowledged, invalidation occurs on strategy checks.
 - heterogeneous mode: per-agent strategy selected by role via `StrategySelector`.
-
-Important: cascade completeness ratio is currently strongest for push path (`eager`). For pull/check paths it does not yet represent full eventual convergence semantics.
 
 ## Transient-State Liveness Guard
 

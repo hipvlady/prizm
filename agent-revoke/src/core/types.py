@@ -103,6 +103,8 @@ class RevocationEvent:
     propagated: Dict[UUID, Optional[int]] = field(default_factory=dict)
     expected_capabilities: Set[UUID] = field(default_factory=set)
     invalidated_capabilities: Set[UUID] = field(default_factory=set)
+    completion_semantics: str = "push"
+    delivery_completion_tick: Optional[int] = None
     cascade_completion_tick: Optional[int] = None
 
 

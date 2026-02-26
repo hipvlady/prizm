@@ -22,7 +22,7 @@ Focus only on chain revocation invariants:
 
 ### 2. Cascade Correctness Guarantees for Pull Strategies
 
-Status: next outstanding item.
+Status: implemented.
 
 - certificate semantics extended for consistency-directed modes (`lazy`, `lease`, `exec_count`),
 - clearer eventual-completion interpretation in pull/check paths.

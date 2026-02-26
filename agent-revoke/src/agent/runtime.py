@@ -84,18 +84,30 @@ class AgentRuntime:
         tick : int, optional
             Delivery tick. Uses current clock tick when omitted.
         """
-        if not self.strategy.accepts_push_revocation:
+        ack_tick = self.clock.now() if tick is None else tick
+        event.propagated[self.agent_id] = ack_tick
+        if self.strategy.accepts_push_revocation:
+            self.monitor.record_agent_ack(
+                self.agent_id,
+                event.id,
+                ack_tick,
+                ack_event="ack_push",
+            )
+        else:
+            self.monitor.record_agent_ack(
+                self.agent_id,
+                event.id,
+                ack_tick,
+                ack_event="observe_pull",
+            )
             LOGGER.debug(
-                "event=revocation_ignored strategy=%s agent=%s capability=%s",
+                "event=revocation_observed strategy=%s agent=%s capability=%s",
                 self.strategy.name,
                 self.agent_id,
                 event.capability_id,
             )
             return
 
-        ack_tick = self.clock.now() if tick is None else tick
-        event.propagated[self.agent_id] = ack_tick
-        self.monitor.record_agent_ack(self.agent_id, event.id, ack_tick)
         invalidated: set[UUID] = set()
         if event.cascade and event.expected_capabilities:
             for cap_id, cap in list(self.state.capabilities.items()):

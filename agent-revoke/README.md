@@ -34,9 +34,12 @@ This project demonstrates one core security question in Agentic IAM:
   - scope attenuation enforcement
   - remaining operation propagation
 - BFS cascade traversal and cascade certificate fields:
+  - `completion_semantics`
+  - `delivery_completion_tick`
   - `expected_capabilities`
   - `invalidated_capabilities`
   - `cascade_completion_tick`
+  - interpretation: delivery completion and local eventual invalidation completion are tracked separately
 - Per-depth bound checker:
   - `unauthorised_actions(depth=d) <= f(strategy, d)`
 - Heterogeneous mode:
@@ -161,7 +164,4 @@ Implemented now:
 - cascade metrics,
 - bounds checker,
 - minimal TLA+ chain model with TLC config (`formal/tla`).
-
-Planned next (not yet implemented end-to-end):
-
-- richer cascade completion semantics for consistency-directed strategies.
+- pull-strategy cascade completion semantics (`lazy`/`lease`/`exec_count`) with two-phase certificate status.

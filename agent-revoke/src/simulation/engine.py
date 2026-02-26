@@ -225,6 +225,7 @@ class SimulationEngine:
                     capability_id=root_cap_id,
                     reason=RevocationReason.EXPLICIT,
                     cascade=self.config["scenario"]["cascade_on_revoke"],
+                    completion_semantics=self._revocation_completion_semantics(),
                 )
                 if self.strategy_name == "eager":
                     self._complete_eager_revocation(event.id, tick)
@@ -319,9 +320,21 @@ class SimulationEngine:
                             capability_id=cap.id,
                             reason=RevocationReason.TRUST_VIOLATION,
                             cascade=True,
+                            completion_semantics=self._revocation_completion_semantics(),
                         )
                         self._anomaly_revoked_agents.add(agent.agent_id)
                         break
+
+    def _revocation_completion_semantics(self) -> str:
+        """Return completion semantics tag for current strategy mode."""
+        if self.heterogeneous_enabled:
+            accepts_push = [agent.strategy.accepts_push_revocation for agent in self.agents.values()]
+            if all(accepts_push):
+                return "push"
+            if any(accepts_push):
+                return "mixed"
+            return "pull_eventual"
+        return "push" if self.strategy.accepts_push_revocation else "pull_eventual"
 
     def _snapshot_remaining_ops_by_depth(self, root_capability_id: UUID, cascade: bool) -> Dict[int, int]:
         """Snapshot remaining operation budgets grouped by depth at revoke tick."""
