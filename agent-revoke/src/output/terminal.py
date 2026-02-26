@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -11,49 +13,74 @@ from rich.table import Table
 console = Console()
 
 
-def print_tick(tick: int, message: str):
+def _tick_prefix(tick: int | None) -> str:
+    """Render a normalized tick prefix for terminal events."""
+    if tick is None:
+        return ""
+    return f"[bold cyan][t={tick}][/bold cyan] "
+
+
+def print_tick(tick: int, message: str) -> None:
     """Print tick-scoped message."""
     console.print(f"[bold cyan][t={tick:.3f}s][/bold cyan] {message}")
 
 
-def print_grant(agent_id: str, resource: str, obo: str):
+def print_grant(agent_id: str, resource: str, obo: str | None, tick: int | None = None) -> None:
     """Print grant event line."""
-    console.print(f'[green]GRANT[/green]  {agent_id} ← "{resource}" (OBO: {obo})')
+    prefix = _tick_prefix(tick)
+    obo_value = obo if obo is not None else "-"
+    console.print(f'{prefix}[green]GRANT[/green]  {agent_id} ← "{resource}" (OBO: {obo_value})')
 
 
-def print_revoke(capability_id: str, reason: str, cascade: bool):
+def print_revoke(capability_id: str, reason: str, cascade: bool, tick: int | None = None) -> None:
     """Print revocation event line."""
+    prefix = _tick_prefix(tick)
     console.print(
-        f"[bold red]⚡REVOKE[/bold red] capability={capability_id} reason={reason} cascade={cascade}"
+        f"{prefix}[bold red]⚡REVOKE[/bold red] capability={capability_id} reason={reason} cascade={cascade}"
     )
 
 
-def print_ack(agent_id: str, mesi_transition: str, latency: int):
+def print_ack(
+    agent_id: str,
+    mesi_transition: str,
+    latency: int,
+    tick: int | None = None,
+) -> None:
     """Print revocation ACK line."""
-    console.print(f"[green]✓ ACK[/green]   {agent_id} [MESI: {mesi_transition}] {latency}ms")
+    prefix = _tick_prefix(tick)
+    console.print(f"{prefix}[green]✓ ACK[/green]   {agent_id} [MESI: {mesi_transition}] {latency}ms")
 
 
-def print_deny(agent_id: str, resource: str, reason: str):
+def print_deny(agent_id: str, resource: str, reason: str, tick: int | None = None) -> None:
     """Print denied action line."""
-    console.print(f"[red]✗ DENY[/red]  {agent_id} attempted {resource} [{reason}]")
+    prefix = _tick_prefix(tick)
+    console.print(f"{prefix}[red]✗ DENY[/red]  {agent_id} attempted {resource} [{reason}]")
 
 
-def print_action(agent_id: str, resource: str):
+def print_action(agent_id: str, resource: str, tick: int | None = None) -> None:
     """Print allowed action line."""
-    console.print(f"[dim]◌ACT[/dim]  {agent_id} {resource} [OK]")
+    prefix = _tick_prefix(tick)
+    console.print(f"{prefix}[dim]◌ACT[/dim]  {agent_id} {resource} [OK]")
 
 
-def print_exhausted(agent_id: str, ops_used: int, max_ops: int):
+def print_exhausted(
+    agent_id: str,
+    ops_used: int,
+    max_ops: int,
+    tick: int | None = None,
+) -> None:
     """Print operation budget exhaustion line."""
-    console.print(f"[cyan]⏹ EXHAUSTED[/cyan] {agent_id} ({ops_used}/{max_ops} ops)")
+    prefix = _tick_prefix(tick)
+    console.print(f"{prefix}[cyan]⏹ EXHAUSTED[/cyan] {agent_id} ({ops_used}/{max_ops} ops)")
 
 
-def print_deleg(from_agent: str, to_agent: str, scope: str):
+def print_deleg(from_agent: str, to_agent: str, scope: str, tick: int | None = None) -> None:
     """Print delegation line."""
-    console.print(f"[yellow]DELEG[/yellow]  {from_agent} → {to_agent} (scope: {scope})")
+    prefix = _tick_prefix(tick)
+    console.print(f"{prefix}[yellow]DELEG[/yellow]  {from_agent} → {to_agent} (scope: {scope})")
 
 
-def build_state_table(agents: dict) -> Table:
+def build_state_table(agents: dict[Any, Any]) -> Table:
     """Build per-agent state summary table."""
     table = Table(title="Agent MESI State")
     table.add_column("agent")
@@ -100,7 +127,7 @@ class SimulationLiveView:
             self._live.stop()
             self._live = None
 
-    def update(self, tick: int, strategy: str, agents: dict) -> None:
+    def update(self, tick: int, strategy: str, agents: dict[Any, Any]) -> None:
         """Update table with latest simulation state."""
         if self._live is None:
             return
@@ -136,13 +163,19 @@ class LiveDashboard:
     def __init__(self) -> None:
         self._view = SimulationLiveView(enabled=True)
 
-    def __enter__(self):
+    def __enter__(self) -> "LiveDashboard":
         self._view.start()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         self._view.stop()
 
-    def update(self, tick: int, agents: dict, scenario_name: str, strategy_name: str) -> None:
+    def update(
+        self,
+        tick: int,
+        agents: dict[Any, Any],
+        scenario_name: str,
+        strategy_name: str,
+    ) -> None:
         _ = scenario_name
         self._view.update(tick, strategy_name, agents)
