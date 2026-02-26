@@ -61,7 +61,7 @@ class LazyInvalidationStrategy(RevocationStrategy):
                     agent.cache.enter_transient_state(cap.id, TransientState.ISG, tick)
                     status = agent.authority.check_capability(agent.agent_id, cap.resource)
                     if status.get("valid", False):
-                        agent.cache.clear_transient_state(cap.id)
+                        agent.cache.clear_transient_state(cap.id, tick)
                     else:
                         agent.invalidate_capability(cap.id)
             agent.cache.state.last_sync_tick = tick

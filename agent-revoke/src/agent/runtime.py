@@ -118,6 +118,23 @@ class AgentRuntime:
             event.capability_id,
         )
 
+    def on_revocation(self, event: RevocationEvent) -> bool:
+        """Contract wrapper: process revocation and return ACK/NACK."""
+        if not self.strategy.accepts_push_revocation:
+            return False
+        self.on_revocation_received(event)
+        return True
+
+    def request_capability(self, resource: str) -> Optional[Capability]:
+        """Request capability from authority and cache if available."""
+        status = self.authority.check_capability(self.agent_id, resource)
+        if not status.get("valid", False):
+            return None
+        cap = self.authority.registry.find_by_agent_resource(self.agent_id, resource)
+        if cap is not None:
+            self.cache.update(cap)
+        return cap
+
     def invalidate_capability(self, capability_id: UUID, tick: Optional[int] = None) -> bool:
         """Invalidate a capability in local cache.
 
@@ -176,7 +193,15 @@ class AgentRuntime:
             self.strategy.record_action(self, cap, record)
         return record
 
-    def check_transient_timeouts(self, tick: int):
+    def report_action(self, action: ActionRecord) -> None:
+        """Record action into local action history for trust scoring."""
+        self.state.action_history.append(action)
+
+    def sync_capabilities(self) -> None:
+        """Update last capability-sync tick marker."""
+        self.state.last_sync_tick = self.clock.now()
+
+    def check_transient_timeouts(self, tick: int) -> list[UUID]:
         """Check transient timeout fail-safe conditions.
 
         Parameters
@@ -187,6 +212,7 @@ class AgentRuntime:
         timed_out = self.cache.check_transient_timeouts(tick)
         for capability_id in timed_out:
             self.monitor.mark_capability_invalidated_for_active_events(capability_id, tick)
+        return timed_out
 
     def _record_action(
         self,

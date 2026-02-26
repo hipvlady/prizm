@@ -77,7 +77,9 @@ class SimulationMetrics:
 class MetricsCollector:
     """Collect and aggregate simulation metrics."""
 
-    def __init__(self):
+    def __init__(self, scenario: str | None = None, strategy: str | None = None):
+        self.scenario = scenario
+        self.strategy = strategy
         self._actions: List[ActionRecord] = []
         self._unauthorized_actions: List[ActionRecord] = []
         self._unauthorized_actions_by_depth: Dict[int, int] = defaultdict(int)
@@ -87,6 +89,9 @@ class MetricsCollector:
         self._unauthorized_actions_in_transient: int = 0
         self._tick_durations: List[float] = []
         self._bound_violations_by_depth: Dict[int, int] = defaultdict(int)
+        self._revocation_latencies: List[int] = []
+        self._transient_durations: List[int] = []
+        self._convergence_ticks: List[int] = []
 
     def record_action(self, record: ActionRecord):
         """Record an action event."""
@@ -105,11 +110,28 @@ class MetricsCollector:
 
     def record_message_broadcast(self, recipient_count: int):
         """Record broadcast overhead as recipient fanout count."""
-        self._message_count += recipient_count
+        for _ in range(recipient_count):
+            self.record_message_sent()
+
+    def record_message_sent(self):
+        """Record one outbound message send attempt."""
+        self._message_count += 1
 
     def record_transient_timeout(self):
         """Record transient timeout fail-safe activation."""
         self._transient_state_timeouts += 1
+
+    def record_transient_duration(self, duration_ticks: int) -> None:
+        """Record one resolved transient-state duration."""
+        self._transient_durations.append(duration_ticks)
+
+    def record_revocation_latency(self, latency_ticks: int) -> None:
+        """Record one end-to-end revocation latency sample."""
+        self._revocation_latencies.append(latency_ticks)
+
+    def record_convergence(self, tick: int) -> None:
+        """Record convergence tick sample."""
+        self._convergence_ticks.append(tick)
 
     def record_tick_duration(self, seconds: float):
         """Record wall-clock duration of one simulation tick."""
@@ -142,7 +164,7 @@ class MetricsCollector:
         wall_time_seconds : float, optional
             End-to-end runtime measured via ``time.perf_counter``.
         """
-        latencies = monitor.get_convergence_latencies()
+        latencies = self._revocation_latencies or monitor.get_convergence_latencies()
         p50 = 0.0
         p99 = 0.0
         avg_convergence = 0.0
@@ -153,6 +175,8 @@ class MetricsCollector:
             else:
                 p50 = p99 = latencies[0]
             avg_convergence = statistics.mean(latencies)
+        elif self._convergence_ticks:
+            avg_convergence = statistics.mean(self._convergence_ticks)
 
         avg_tick_seconds = statistics.mean(self._tick_durations) if self._tick_durations else 0.0
         p95_tick_seconds = (
@@ -160,6 +184,10 @@ class MetricsCollector:
             if len(self._tick_durations) > 1
             else (self._tick_durations[0] if self._tick_durations else 0.0)
         )
+        transient_avg = (
+            statistics.mean(self._transient_durations) if self._transient_durations else 0.0
+        )
+        transient_max = max(self._transient_durations) if self._transient_durations else 0
 
         return SimulationMetrics(
             scenario=scenario,
@@ -173,6 +201,8 @@ class MetricsCollector:
             revocation_latency_p50=p50,
             revocation_latency_p99=p99,
             convergence_time=avg_convergence,
+            transient_state_duration_avg=transient_avg,
+            transient_state_duration_max=transient_max,
             transient_state_timeouts=self._transient_state_timeouts,
             unauthorized_actions_in_transient=self._unauthorized_actions_in_transient,
             staleness_window_max=monitor.get_staleness_window_max(),

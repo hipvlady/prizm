@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Set, Tuple, Any
 from uuid import UUID
 
 from src.core.mesi import MESIState
@@ -23,6 +23,16 @@ class MonitoredEvent:
     agents_to_notify: Set[UUID]
 
 
+@dataclass(frozen=True)
+class TimelineEntry:
+    """Trace entry for one revocation event progression."""
+
+    tick: int
+    event: str
+    agent_id: UUID | None = None
+    capability_id: UUID | None = None
+
+
 class ConsistencyMonitor:
     """Track revocation convergence latencies and stale-authorisation windows."""
 
@@ -33,18 +43,28 @@ class ConsistencyMonitor:
         self._cascade_completion_latencies: List[int] = []
         self._stale_started: Dict[Tuple[UUID, UUID], int] = {}
         self._staleness_window_max: int = 0
+        self._event_traces: Dict[UUID, List[TimelineEntry]] = {}
+        self._delegation_tree: Dict[str, List[str]] = {}
+        self._unauthorized_actions_by_depth: Dict[int, int] = {}
+        self._last_global_state: Dict[UUID, Dict[UUID, MESIState]] = {}
 
     def record_revocation_broadcast(self, event: "RevocationEvent", agents_to_notify: Set[UUID]) -> None:
         """Register an event broadcast and expected recipients."""
         for agent_id in agents_to_notify:
             event.propagated.setdefault(agent_id, None)
         self._pending_events[event.id] = MonitoredEvent(event, agents_to_notify)
+        self._event_traces.setdefault(event.id, []).append(
+            TimelineEntry(tick=event.issued_tick, event="broadcast", capability_id=event.capability_id)
+        )
 
     def record_agent_ack(self, agent_id: UUID, event_id: UUID, current_tick: int) -> None:
         """Register recipient ACK and close event once all ACKs are received."""
         if event_id in self._pending_events:
             monitored = self._pending_events[event_id]
             monitored.agents_to_notify.discard(agent_id)
+            self._event_traces.setdefault(event_id, []).append(
+                TimelineEntry(tick=current_tick, event="ack", agent_id=agent_id)
+            )
             if not monitored.agents_to_notify:
                 latency = current_tick - monitored.event.issued_tick
                 self._convergence_latencies.append(latency)
@@ -62,6 +82,13 @@ class ConsistencyMonitor:
 
         if capability_id in event.expected_capabilities:
             event.invalidated_capabilities.add(capability_id)
+            self._event_traces.setdefault(event_id, []).append(
+                TimelineEntry(
+                    tick=current_tick,
+                    event="capability_invalidated",
+                    capability_id=capability_id,
+                )
+            )
             if (
                 event.cascade_completion_tick is None
                 and event.expected_capabilities
@@ -117,8 +144,11 @@ class ConsistencyMonitor:
             Authority-side canonical capability registry.
         """
         currently_stale: Set[Tuple[UUID, UUID]] = set()
+        global_state: Dict[UUID, Dict[UUID, MESIState]] = {}
         for agent_id, agent in agents.items():
+            agent_states: Dict[UUID, MESIState] = {}
             for cap_id, local_cap in agent.state.capabilities.items():
+                agent_states[cap_id] = local_cap.state
                 authoritative = registry.get(cap_id)
                 if authoritative is None:
                     continue
@@ -136,12 +166,14 @@ class ConsistencyMonitor:
                         self._staleness_window_max,
                         tick - self._stale_started[key],
                     )
+            global_state[agent_id] = agent_states
 
         for key in list(self._stale_started.keys()):
             if key not in currently_stale:
                 stale_duration = tick - self._stale_started[key]
                 self._staleness_window_max = max(self._staleness_window_max, stale_duration)
                 del self._stale_started[key]
+        self._last_global_state = global_state
 
     def get_pending_ack_count(self, event_id: UUID) -> int:
         """Return count of recipients that still need to ACK an event."""
@@ -210,3 +242,38 @@ class ConsistencyMonitor:
         if expected == 0:
             return 0.0
         return invalidated / expected
+
+    def record_unauthorized_action(self, depth: int) -> None:
+        """Record unauthorized action count by delegation depth."""
+        self._unauthorized_actions_by_depth[depth] = (
+            self._unauthorized_actions_by_depth.get(depth, 0) + 1
+        )
+
+    def set_delegation_tree(self, tree: Dict[str, List[str]]) -> None:
+        """Set latest delegation graph snapshot."""
+        self._delegation_tree = tree
+
+    def get_global_state(self) -> Dict[UUID, Dict[UUID, MESIState]]:
+        """Return latest observed per-agent capability MESI state map."""
+        return {agent_id: dict(caps) for agent_id, caps in self._last_global_state.items()}
+
+    def get_metrics(self, time_window: tuple[float, float]) -> Dict[str, Any]:
+        """Return monitor metrics for requested window (window currently informational)."""
+        _ = time_window
+        return {
+            "staleness_window_max": self._staleness_window_max,
+            "convergence_latencies": list(self._convergence_latencies),
+            "cascade_completion_latencies": list(self._cascade_completion_latencies),
+        }
+
+    def get_revocation_trace(self, event_id: UUID) -> list[TimelineEntry]:
+        """Return timeline trace for one revocation event."""
+        return list(self._event_traces.get(event_id, []))
+
+    def get_delegation_tree(self) -> Dict[str, List[str]]:
+        """Return last delegation tree snapshot."""
+        return {k: list(v) for k, v in self._delegation_tree.items()}
+
+    def get_unauthorized_actions_by_depth(self) -> Dict[int, int]:
+        """Return unauthorized action counts keyed by delegation depth."""
+        return dict(self._unauthorized_actions_by_depth)

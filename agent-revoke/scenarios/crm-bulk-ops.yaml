@@ -4,26 +4,33 @@
 # Key Metric: unauthorized_actions_count
 
 simulation:
-  duration_ticks: 120
-  agents: 1
-  actions_per_tick: 100 # Deterministic high velocity workload
   seed: 42
+  duration_ticks: 120
+  num_agents: 2
+
+network:
   latency_ticks: 5
-  transient_timeout_ticks: 100
+  message_loss_rate: 0.0
 
 scenario:
   name: "CRM High-Velocity Agent"
   delegation_depth: 1 # Single powerful agent
-  cascade_revocation: false
-  revocation_trigger_tick: 0 # Revoke immediately to measure bounded post-revoke damage
+  revocation_tick: 0 # Revoke immediately to measure bounded post-revoke damage
+  cascade_on_revoke: false
+  action_probability: 1.0
+  agent_velocity: 100
+  anomaly_start_tick: null
+  anomaly_burst_rate: null
+  anomaly_detection_window: null
 
 strategies:
+  eager: {}
   lazy:
     check_interval_ticks: 23 # Approx. 2300 unauthorized ops at 100 ops/tick
   lease:
     default_ttl_ticks: 60 # 60-tick TTL => ~6000 unauthorized ops at 100 ops/tick
   exec_count:
-    max_operations: 50 # The key bound for this scenario
+    max_operations: 500 # Spec authoritative value for CRM
 
 trust:
   initial_score: 0.8
@@ -34,3 +41,6 @@ delegation:
   max_depth: 3
   require_scope_subset: true
   propagate_remaining_ops: true
+
+transient:
+  timeout_ticks: 100

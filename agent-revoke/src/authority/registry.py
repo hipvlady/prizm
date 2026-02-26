@@ -80,3 +80,10 @@ class CapabilityRegistry:
                         visited.add(child_id)
                         queue.append(child_id)
         return chain
+
+    def get_delegation_tree_snapshot(self) -> Dict[str, List[str]]:
+        """Return delegation graph snapshot (parent capability -> child capabilities)."""
+        snapshot: Dict[str, List[str]] = {}
+        for parent, children in self._delegation_tree.items():
+            snapshot[str(parent)] = [str(child) for child in sorted(children, key=str)]
+        return snapshot

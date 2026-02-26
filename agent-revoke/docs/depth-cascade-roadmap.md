@@ -8,25 +8,30 @@ Strengthen delegation-depth guarantees and formalise cascade properties with min
 
 ## Planned Additions
 
-### 1. Delegation Depth Policies
+### 1. Minimal TLA+ Pack
 
-- hard policy for `max_depth`,
-- strict scope attenuation semantics,
-- explicit remaining-ops propagation guarantees.
-
-### 2. Cascade Correctness Guarantees
-
-- certificate semantics extended for all strategies,
-- clearer eventual-completion interpretation in consistency-directed paths,
-- per-depth unauthorised bounds as first-class report output.
-
-### 3. Minimal TLA+ Pack
+Status: implemented.
 
 Focus only on chain revocation invariants:
 
 - Safety: revoked parent implies descendants are eventually invalid.
 - Liveness: no capability remains in transient state beyond timeout.
 - Bound: unauthorised actions per depth stay within strategy function.
+- Files: `formal/tla/RevocationChain.tla`, `formal/tla/RevocationChain.cfg`.
+- Runbook: `formal/tla/README.md`.
+
+### 2. Cascade Correctness Guarantees for Pull Strategies
+
+Status: next outstanding item.
+
+- certificate semantics extended for consistency-directed modes (`lazy`, `lease`, `exec_count`),
+- clearer eventual-completion interpretation in pull/check paths.
+
+### 3. Report Template Split
+
+Status: implemented.
+
+- separate templates for single-strategy, comparison, and aggregated views.
 
 ## Why This Is Next
 

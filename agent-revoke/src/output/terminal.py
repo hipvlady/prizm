@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from rich.console import Console
 from rich.live import Live
+from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
@@ -37,9 +38,46 @@ def print_deny(agent_id: str, resource: str, reason: str):
     console.print(f"[red]✗ DENY[/red]  {agent_id} attempted {resource} [{reason}]")
 
 
+def print_action(agent_id: str, resource: str):
+    """Print allowed action line."""
+    console.print(f"[dim]◌ACT[/dim]  {agent_id} {resource} [OK]")
+
+
+def print_exhausted(agent_id: str, ops_used: int, max_ops: int):
+    """Print operation budget exhaustion line."""
+    console.print(f"[cyan]⏹ EXHAUSTED[/cyan] {agent_id} ({ops_used}/{max_ops} ops)")
+
+
 def print_deleg(from_agent: str, to_agent: str, scope: str):
     """Print delegation line."""
     console.print(f"[yellow]DELEG[/yellow]  {from_agent} → {to_agent} (scope: {scope})")
+
+
+def build_state_table(agents: dict) -> Table:
+    """Build per-agent state summary table."""
+    table = Table(title="Agent MESI State")
+    table.add_column("agent")
+    table.add_column("states")
+    table.add_column("trust")
+    for agent_id, agent in sorted(agents.items(), key=lambda x: str(x[0])):
+        states = sorted({cap.state.value for cap in agent.state.capabilities.values()})
+        table.add_row(
+            str(agent_id)[:8],
+            ",".join(states) if states else "-",
+            f"{agent.state.trust_score:.2f}",
+        )
+    return table
+
+
+def build_summary_panel(metrics) -> Panel:
+    """Build compact summary panel for key metrics."""
+    body = (
+        f"unauthorized={metrics.unauthorized_actions_count}\n"
+        f"staleness_max={metrics.staleness_window_max}\n"
+        f"cascade_ratio={metrics.cascade_completeness_ratio:.2f}\n"
+        f"timeouts={metrics.transient_state_timeouts}"
+    )
+    return Panel(body, title="Simulation Summary")
 
 
 class SimulationLiveView:
@@ -90,3 +128,21 @@ class SimulationLiveView:
             else:
                 table.add_row("", "", agent, states)
         return table
+
+
+class LiveDashboard:
+    """Context-manager wrapper around live updates."""
+
+    def __init__(self) -> None:
+        self._view = SimulationLiveView(enabled=True)
+
+    def __enter__(self):
+        self._view.start()
+        return self
+
+    def __exit__(self, *args):
+        self._view.stop()
+
+    def update(self, tick: int, agents: dict, scenario_name: str, strategy_name: str) -> None:
+        _ = scenario_name
+        self._view.update(tick, strategy_name, agents)

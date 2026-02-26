@@ -1,34 +1,87 @@
 # Copyright (c) 2026 Prizm contributors.
-"""Network latency simulator utilities."""
+"""Simulated network transport with latency and loss."""
 
 from __future__ import annotations
 
-import heapq
-from typing import Callable, List, Tuple
+import random
+from collections import deque
+from dataclasses import dataclass
+from typing import Any, Deque, Optional
+from uuid import UUID
 
 
-class SimulatedNetwork:
-    """Inject configurable latency (in ticks) into callback delivery."""
+@dataclass
+class NetworkMessage:
+    """Message envelope used by the simulated network."""
 
-    def __init__(self, latency_ticks: int):
-        self.latency_ticks = latency_ticks
-        self._queue: List[Tuple[int, Callable]] = []
+    payload: Any
+    source: Optional[UUID]
+    destination: UUID
+    message_type: str
+    sent_tick: int
+    delivery_tick: int
+    delivered: bool = False
 
-    def send(self, deliver_at_tick: int, callback: Callable) -> None:
-        """Queue a callback for delivery at a given tick."""
-        heapq.heappush(self._queue, (deliver_at_tick, callback))
 
-    def process(self, current_tick: int) -> int:
-        """Process callbacks due by the current tick.
+class Network:
+    """Simulated network with configurable latency and message loss."""
 
-        Returns
-        -------
-        int
-            Number of callbacks processed.
-        """
-        count = 0
-        while self._queue and self._queue[0][0] <= current_tick:
-            _, callback = heapq.heappop(self._queue)
-            callback()
-            count += 1
-        return count
+    def __init__(self, latency_ticks: int, message_loss_rate: float, rng: random.Random) -> None:
+        self._queue: Deque[NetworkMessage] = deque()
+        self._latency = latency_ticks
+        self._loss_rate = message_loss_rate
+        self._rng = rng
+        self._total_sent: int = 0
+
+    def send(
+        self,
+        payload: Any,
+        source: Optional[UUID],
+        destination: UUID,
+        current_tick: int,
+        message_type: str,
+    ) -> NetworkMessage | None:
+        """Enqueue message for future delivery or drop on simulated loss."""
+        self._total_sent += 1
+        if self._loss_rate > 0.0 and self._rng.random() < self._loss_rate:
+            return None
+
+        msg = NetworkMessage(
+            payload=payload,
+            source=source,
+            destination=destination,
+            message_type=message_type,
+            sent_tick=current_tick,
+            delivery_tick=current_tick + self._latency,
+        )
+        self._queue.append(msg)
+        return msg
+
+    def deliver_due(self, current_tick: int) -> list[NetworkMessage]:
+        """Deliver all queued messages scheduled up to ``current_tick``."""
+        due: list[NetworkMessage] = []
+        remaining: Deque[NetworkMessage] = deque()
+        while self._queue:
+            msg = self._queue.popleft()
+            if msg.delivery_tick <= current_tick:
+                msg.delivered = True
+                due.append(msg)
+            else:
+                remaining.append(msg)
+        self._queue = remaining
+        return due
+
+    @property
+    def pending_count(self) -> int:
+        """Return queued messages awaiting delivery."""
+        return len(self._queue)
+
+    @property
+    def message_overhead(self) -> int:
+        """Return total attempted sends."""
+        return self._total_sent
+
+    @property
+    def latency_ticks(self) -> int:
+        """Return configured latency in ticks."""
+        return self._latency

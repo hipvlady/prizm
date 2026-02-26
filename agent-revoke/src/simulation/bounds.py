@@ -33,23 +33,24 @@ def calculate_depth_bound(
         Maximum allowed unauthorised actions at the given depth.
     """
     simulation = config.get("simulation", {})
+    scenario = config.get("scenario", {})
     strategies = config.get("strategies", {})
-    if "actions_per_tick" in simulation:
+    if "agent_velocity" in scenario:
+        velocity = max(0, int(scenario.get("agent_velocity", 0)))
+    elif "actions_per_tick" in simulation:
         velocity = max(0, int(simulation.get("actions_per_tick", 0)))
     else:
-        action_probability = float(simulation.get("action_probability", 0.0))
-        # For probabilistic workloads, use worst-case one action per tick to avoid
-        # under-estimating security bounds from expected-value rates.
+        action_probability = float(scenario.get("action_probability", simulation.get("action_probability", 0.0)))
         velocity = 1 if action_probability > 0 else 0
-        anomaly_burst = int(config.get("scenario", {}).get("anomaly_burst_actions_per_tick", 0))
+        anomaly_burst = int(scenario.get("anomaly_burst_rate", scenario.get("anomaly_burst_actions_per_tick", 0)) or 0)
         velocity = max(velocity, anomaly_burst)
-    network_latency = simulation.get("latency_ticks", 1)
+    network_latency = config.get("network", {}).get("latency_ticks", simulation.get("latency_ticks", 1))
 
     if strategy == "eager":
         return math.ceil(float(velocity) * (network_latency * (depth + 1)))
     if strategy == "lazy":
         check_interval = strategies.get("lazy", {}).get("check_interval_ticks", 100)
-        return math.ceil(float(velocity) * (check_interval + network_latency * (depth + 1)))
+        return math.ceil(float(velocity) * (check_interval + network_latency) * (depth + 1))
     if strategy == "lease":
         ttl = strategies.get("lease", {}).get("default_ttl_ticks", 500)
         return math.ceil(float(velocity) * ttl)

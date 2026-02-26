@@ -6,6 +6,7 @@ This folder is structured for hackathon judges and technical reviewers.
 
 - `judges-guide.md`: 5-minute walkthrough and scoring-oriented narrative.
 - `metrics-and-evidence.md`: reproducible commands and observed results.
+- `scenario-schema.md`: scenario YAML contract and validation behavior.
 
 ## Technical Core
 
@@ -21,3 +22,7 @@ This folder is structured for hackathon judges and technical reviewers.
 ## Next Implementation Wave
 
 - `depth-cascade-roadmap.md`: delegation depth guarantees + minimal TLA+ scope.
+
+## Formal Verification Pack
+
+- `../formal/tla/README.md`: minimal TLA+ model, TLC config, and run command.

@@ -14,6 +14,9 @@
     <main class="container">
         <h1>Simulation Report: {{ scenario }}</h1>
         <p><strong>Strategy:</strong> <code>{{ strategy }}</code></p>
+        {% if num_runs and num_runs > 1 %}
+        <p><strong>Runs:</strong> {{ num_runs }} (<code>seed={{ seed_range }}</code>)</p>
+        {% endif %}
         <table>
             <thead>
                 <tr>
@@ -114,6 +117,37 @@
                     <td>{{ row.strategy }}</td>
                     <td>{{ row.clock_dependent }}</td>
                     <td>{{ row.robustness }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% if bound_rows %}
+        <h3>Bound Violations</h3>
+        <table>
+            <thead>
+                <tr>
+                    {% if bound_rows[0].strategy is defined %}
+                    <th>Strategy</th>
+                    <th>Total Violations</th>
+                    <th>By Depth</th>
+                    {% else %}
+                    <th>Depth</th>
+                    <th>Violations</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in bound_rows %}
+                <tr>
+                    {% if row.strategy is defined %}
+                    <td>{{ row.strategy }}</td>
+                    <td>{{ row.violations }}</td>
+                    <td><code>{{ row.by_depth }}</code></td>
+                    {% else %}
+                    <td>{{ row.depth }}</td>
+                    <td>{{ row.count }}</td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>

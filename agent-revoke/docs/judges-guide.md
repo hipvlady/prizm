@@ -31,6 +31,8 @@ Expected: all tests pass.
 python scripts/run_strategy_comparison.py \
   --scenario scenarios/crm-bulk-ops.yaml \
   --output /tmp/crm-comparison.html \
+  --runs 10 \
+  --seed-start 0 \
   --log-level ERROR
 ```
 
@@ -38,6 +40,7 @@ Open report and highlight unauthorised action differences:
 
 - `lease` (time-window bound) allows large post-revoke volume.
 - `exec_count` constrains impact to configured operation budget.
+- Aggregated rows are reported as `mean ± std` across seeds.
 
 ### Step 3: Show cascade depth behaviour
 

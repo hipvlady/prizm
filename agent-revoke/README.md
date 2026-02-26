@@ -39,6 +39,19 @@ This project demonstrates one core security question in Agentic IAM:
   - `cascade_completion_tick`
 - Per-depth bound checker:
   - `unauthorised_actions(depth=d) <= f(strategy, d)`
+- Heterogeneous mode:
+  - role-based per-agent strategy assignment (`eager`/`lazy`/`lease`/`exec_count`)
+- Multi-run aggregated comparison:
+  - `--runs` + `--seed-start`
+  - report values rendered as `mean ± std`
+- Scenario schema validation:
+  - `load_scenario()` validates required fields and value ranges
+  - invalid configs fail fast with `ScenarioValidationError`
+- Canonical scenario schema uses:
+  - `simulation.num_agents`
+  - `network.latency_ticks` / `network.message_loss_rate`
+  - `transient.timeout_ticks`
+  - `scenario.revocation_tick` / `scenario.cascade_on_revoke`
 - HTML comparison report (Pico.css + Chart.js).
 - Automated tests and coverage.
 
@@ -68,6 +81,8 @@ python -m src.simulation.engine scenarios/banking-cascade.yaml --strategy eager 
 python scripts/run_strategy_comparison.py \
   --scenario scenarios/crm-bulk-ops.yaml \
   --output crm-comparison.html \
+  --runs 10 \
+  --seed-start 0 \
   --log-level ERROR
 ```
 
@@ -79,6 +94,8 @@ python scripts/run_strategy_comparison.py \
 python scripts/run_strategy_comparison.py \
   --scenario scenarios/crm-bulk-ops.yaml \
   --output /tmp/crm-comparison.html \
+  --runs 10 \
+  --seed-start 0 \
   --log-level ERROR
 ```
 
@@ -113,7 +130,7 @@ python scripts/run_strategy_comparison.py \
 
 ## Quality Signals
 
-- Tests: `72 passed` (latest local run).
+- Tests: `89 passed` (latest local run on **February 26, 2026**).
 - Coverage: `88%` total (`coverage run -m pytest && coverage report -m`).
 - Exceptions are domain-specific (`RevocationError`, `StaleCredentialError`, `CacheMissError`, etc.).
 - Structured logging with severity levels (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
@@ -132,6 +149,7 @@ Start here:
 - `docs/industry-context.md`
 - `docs/primer-insights.md`
 - `docs/depth-cascade-roadmap.md`
+- `formal/tla/README.md`
 
 ## Current Scope vs Next Scope
 
@@ -141,10 +159,9 @@ Implemented now:
 - strategy comparison,
 - depth policies,
 - cascade metrics,
-- bounds checker.
+- bounds checker,
+- minimal TLA+ chain model with TLC config (`formal/tla`).
 
 Planned next (not yet implemented end-to-end):
 
-- minimal TLA+ spec and TLC run integration,
-- richer cascade completion semantics for consistency-directed strategies,
-- tighter deterministic control for all scenarios.
+- richer cascade completion semantics for consistency-directed strategies.

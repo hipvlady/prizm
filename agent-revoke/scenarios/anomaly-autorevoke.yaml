@@ -4,28 +4,34 @@
 # Key Metric: time_to_detect_anomaly
 
 simulation:
+  seed: 42
   duration_ticks: 300
-  agents: 5
-  action_probability: 0.7
+  num_agents: 5
+
+network:
   latency_ticks: 10
-  transient_timeout_ticks: 100
+  message_loss_rate: 0.0
 
 scenario:
   name: "Anomaly Auto-Revocation"
   delegation_depth: 1
-  cascade_revocation: false
-  revocation_trigger_tick: null # No manual revocation
-  anomaly_behavior_starts_tick: 50 # Simulation should model anomalous behavior starting at this tick
+  cascade_on_revoke: false
+  revocation_tick: null # No manual revocation
+  action_probability: 0.7
+  agent_velocity: 1
+  anomaly_start_tick: 50 # Simulation should model anomalous behavior starting at this tick
   anomaly_target_agent_index: 0
-  anomaly_burst_actions_per_tick: 12 # Bursty behaviour to trigger trust anomaly detector
+  anomaly_burst_rate: 12 # Bursty behaviour to trigger trust anomaly detector
+  anomaly_detection_window: 10
 
 strategies:
+  eager: {}
   lazy:
     check_interval_ticks: 10
   lease:
     default_ttl_ticks: 3000
   exec_count:
-    max_operations: 100
+    max_operations: 1000 # Spec authoritative value for anomaly trigger scenario
 
 trust:
   initial_score: 0.8
@@ -36,3 +42,6 @@ delegation:
   max_depth: 3
   require_scope_subset: true
   propagate_remaining_ops: true
+
+transient:
+  timeout_ticks: 100

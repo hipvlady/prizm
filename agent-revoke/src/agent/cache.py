@@ -103,10 +103,19 @@ class AgentCache:
             new_cap_data["transient_entered_tick"] = tick
             self.update(Capability(**new_cap_data))
 
-    def clear_transient_state(self, capability_id: UUID):
+    def clear_transient_state(self, capability_id: UUID, tick: Optional[int] = None):
         """Clear transient markers after successful resolution."""
         cap = self.get(capability_id)
         if cap:
+            if (
+                self.metrics_collector is not None
+                and cap.transient_entered_tick is not None
+                and tick is not None
+                and tick >= cap.transient_entered_tick
+            ):
+                self.metrics_collector.record_transient_duration(
+                    tick - cap.transient_entered_tick
+                )
             new_cap_data = cap.to_dict()
             new_cap_data["transient_state"] = None
             new_cap_data["transient_entered_tick"] = None
@@ -129,6 +138,10 @@ class AgentCache:
         for cap_id, cap in list(self.state.capabilities.items()):
             if cap.transient_state and cap.transient_entered_tick is not None:
                 if (tick - cap.transient_entered_tick) > self.transient_timeout_ticks:
+                    if self.metrics_collector is not None:
+                        self.metrics_collector.record_transient_duration(
+                            tick - cap.transient_entered_tick
+                        )
                     if self.invalidate(cap_id):
                         timed_out.append(cap_id)
                     if self.metrics_collector is not None:

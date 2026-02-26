@@ -10,20 +10,30 @@ import logging
 import sys
 from pathlib import Path
 
-import yaml
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.core.logging_utils import configure_logging
-from src.output.report import generate_strategy_comparison_report, save_report
+from src.output.report import (
+    generate_aggregated_comparison_report,
+    generate_strategy_comparison_report,
+    save_report,
+)
+from src.simulation.aggregation import aggregate_comparison_runs
 from src.simulation.engine import SimulationEngine
+from src.simulation.scenarios import load_scenario
 
 DEFAULT_STRATEGIES = ("eager", "lazy", "lease", "exec_count")
 
 
-def run_comparison(scenario_path: Path, strategies: tuple[str, ...]):
+def run_comparison(
+    scenario_path: Path,
+    strategies: tuple[str, ...],
+    *,
+    runs: int = 1,
+    seed_start: int = 0,
+):
     """Execute each strategy and collect metrics.
 
     Parameters
@@ -32,22 +42,30 @@ def run_comparison(scenario_path: Path, strategies: tuple[str, ...]):
         Scenario file path.
     strategies : tuple[str, ...]
         Strategy names to run.
+    runs : int, optional
+        Number of runs per strategy.
+    seed_start : int, optional
+        First seed to use. Subsequent runs increment by 1.
 
     Returns
     -------
-    list[SimulationMetrics]
-        Metrics in strategy order.
+    dict[str, list[SimulationMetrics]]
+        Metrics grouped by strategy.
     """
-    with scenario_path.open("r", encoding="utf-8") as f:
-        base_config = yaml.safe_load(f)
+    base_config = load_scenario(str(scenario_path))
 
-    metrics_list = []
+    metrics_by_strategy = {}
     for strategy in strategies:
-        config = copy.deepcopy(base_config)
-        engine = SimulationEngine(config, strategy, str(scenario_path))
-        metrics = engine.run()
-        metrics_list.append(metrics)
-    return metrics_list
+        strategy_runs = []
+        for run_idx in range(runs):
+            config = copy.deepcopy(base_config)
+            config.setdefault("simulation", {})
+            config["simulation"]["seed"] = seed_start + run_idx
+            engine = SimulationEngine(config, strategy, str(scenario_path))
+            metrics = engine.run()
+            strategy_runs.append(metrics)
+        metrics_by_strategy[strategy] = strategy_runs
+    return metrics_by_strategy
 
 
 def main() -> None:
@@ -76,6 +94,18 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging verbosity level.",
     )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Runs per strategy (seeds: seed-start to seed-start+runs-1).",
+    )
+    parser.add_argument(
+        "--seed-start",
+        type=int,
+        default=0,
+        help="Start seed used for repeated strategy runs.",
+    )
     args = parser.parse_args()
 
     configure_logging(getattr(logging, args.log_level))
@@ -84,19 +114,44 @@ def main() -> None:
     output_path = Path(args.output)
     strategies = tuple(s.strip() for s in args.strategies.split(",") if s.strip())
 
-    metrics_list = run_comparison(scenario_path, strategies)
-    html = generate_strategy_comparison_report(metrics_list)
+    metrics_by_strategy = run_comparison(
+        scenario_path,
+        strategies,
+        runs=max(1, args.runs),
+        seed_start=args.seed_start,
+    )
+    if args.runs > 1:
+        aggregated = aggregate_comparison_runs(metrics_by_strategy)
+        html = generate_aggregated_comparison_report(
+            aggregated,
+            scenario=str(scenario_path),
+            seed_start=args.seed_start,
+        )
+    else:
+        metrics_list = [metrics_by_strategy[s][0] for s in strategies]
+        html = generate_strategy_comparison_report(metrics_list)
     save_report(html, output_path)
 
     print(f"Scenario: {scenario_path}")
     print(f"Strategies: {', '.join(strategies)}")
+    print(f"Runs per strategy: {max(1, args.runs)}")
+    print(f"Seed range: {args.seed_start}..{args.seed_start + max(1, args.runs) - 1}")
     print(f"Report: {output_path}")
-    for m in metrics_list:
-        print(
-            f"- {m.strategy}: unauthorized={m.unauthorized_actions_count}, "
-            f"staleness_max={m.staleness_window_max}, p50={m.revocation_latency_p50}, "
-            f"wall_s={m.wall_time_seconds:.6f}"
-        )
+    if args.runs > 1:
+        for item in aggregate_comparison_runs(metrics_by_strategy):
+            print(
+                f"- {item.strategy}: unauthorized={item.unauthorized_mean:.2f} ± {item.unauthorized_std:.2f}, "
+                f"staleness_max={item.staleness_max_mean:.2f} ± {item.staleness_max_std:.2f}, "
+                f"p50={item.p50_mean:.2f} ± {item.p50_std:.2f}"
+            )
+    else:
+        for strategy in strategies:
+            m = metrics_by_strategy[strategy][0]
+            print(
+                f"- {m.strategy}: unauthorized={m.unauthorized_actions_count}, "
+                f"staleness_max={m.staleness_window_max}, p50={m.revocation_latency_p50}, "
+                f"wall_s={m.wall_time_seconds:.6f}"
+            )
 
 
 if __name__ == "__main__":

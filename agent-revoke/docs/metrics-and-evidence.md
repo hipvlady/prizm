@@ -17,7 +17,7 @@ coverage report -m
 
 Latest local run:
 
-- tests: `72 passed`
+- tests: `89 passed` (**February 26, 2026**)
 - total line coverage: `88%`
 
 ### Strategy comparison
@@ -26,6 +26,8 @@ Latest local run:
 python scripts/run_strategy_comparison.py \
   --scenario scenarios/crm-bulk-ops.yaml \
   --output /tmp/crm-comparison.html \
+  --runs 10 \
+  --seed-start 0 \
   --log-level ERROR
 ```
 
@@ -74,4 +76,5 @@ Current tested guarantee:
 
 - HTML comparison reports from script output path.
 - Strategy summary on stdout.
+- Optional aggregated report mode (`--runs > 1`) with `mean ± std`.
 - Structured logs with severity (`DEBUG`, `INFO`, `WARNING`, `ERROR`).

@@ -8,8 +8,10 @@
 - `AgentRuntime` (`src/agent/runtime.py`): local cache and action validation path.
 - Strategies (`src/strategies/*.py`): coherence policy implementations.
 - `SimulationEngine` (`src/simulation/engine.py`): tick loop, scenario execution, and instrumentation.
+- `Network` (`src/simulation/network.py`): latency/loss transport with delivery queue and overhead tracking.
 - `ConsistencyMonitor` (`src/simulation/consistency.py`): convergence and staleness tracking.
 - `MetricsCollector` (`src/simulation/metrics.py`): aggregated run metrics.
+- `ScenarioLoader` (`src/simulation/scenarios.py`): schema validation and normalization for scenario YAML.
 
 ## Data and Message Flow
 
@@ -66,6 +68,7 @@ This gives machine-readable evidence for cascade progress in push paths.
 
 - `eager`: push invalidation accepted immediately at agent runtime (`accepts_push_revocation=True`).
 - `lazy`, `lease`, `exec_count`: consistency-directed and action-time checked.
+- heterogeneous mode: per-agent strategy selected by role via `StrategySelector`.
 
 Important: cascade completeness ratio is currently strongest for push path (`eager`). For pull/check paths it does not yet represent full eventual convergence semantics.
 
@@ -77,3 +80,12 @@ ADR-005 is implemented in cache timeout checks:
 - force transition to `Invalid`.
 
 This prevents indefinite transient lock-in under message-loss or delayed completion.
+
+## Minimal Formal Model Coverage
+
+The roadmap's minimal formal pack is now present under `formal/tla`.
+
+- `RevocationChain.tla` models a delegation chain with root revocation and timeout-driven invalidation.
+- `CascadeSafety` checks: revoked ancestor leads descendants to `Invalid` eventually.
+- `TransientEventuallyInvalid` and `TransientAgeBound` check timeout liveness behavior.
+- `UnauthorizedWithinBound` checks per-depth unauthorized action limits against configured bounds.

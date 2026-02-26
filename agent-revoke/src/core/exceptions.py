@@ -56,3 +56,11 @@ class RemainingOpsPropagationError(AgentRevokeError):
     def __init__(self, parent_capability_id: UUID, message: str):
         super().__init__(f"parent_capability={parent_capability_id}: {message}")
         self.parent_capability_id = parent_capability_id
+
+
+class ScenarioValidationError(AgentRevokeError):
+    """Raised when scenario YAML does not match expected schema."""
+
+    def __init__(self, path: str, message: str):
+        super().__init__(f"scenario={path}: {message}")
+        self.path = path

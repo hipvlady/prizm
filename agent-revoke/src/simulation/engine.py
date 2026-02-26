@@ -7,12 +7,10 @@ import argparse
 import copy
 import logging
 import random
-from collections import defaultdict, deque
+from collections import defaultdict
 from time import perf_counter
 from typing import Any, Dict
 from uuid import UUID, uuid4
-
-import yaml
 
 from src.agent.runtime import AgentRuntime
 from src.authority.broadcaster import RevocationBroadcaster
@@ -26,12 +24,15 @@ from src.core.types import DelegationPolicy, MESIState, RevocationReason
 from src.output.terminal import SimulationLiveView
 from src.simulation.consistency import ConsistencyMonitor
 from src.simulation.metrics import MetricsCollector
+from src.simulation.network import Network
 from src.simulation.bounds import calculate_depth_bound
+from src.simulation.scenarios import load_scenario
 from src.strategies.base import RevocationStrategy
 from src.strategies.eager import EagerInvalidationStrategy
 from src.strategies.exec_count import ExecCountStrategy
 from src.strategies.lazy import LazyInvalidationStrategy
 from src.strategies.lease import LeaseBasedStrategy
+from src.strategies.selector import StrategySelector
 
 LOGGER = get_logger(__name__)
 
@@ -58,8 +59,7 @@ class SimulationEngine:
         self.rng = random.Random(self.config["simulation"].get("seed", 42))
 
         self.consistency_monitor = ConsistencyMonitor()
-        self.metrics_collector = MetricsCollector()
-        self.message_bus = deque()
+        self.metrics_collector = MetricsCollector(scenario_name, strategy_name)
         self._depth_unauthorized_counts: Dict[int, int] = defaultdict(int)
         self._remaining_ops_at_revoke_by_depth: Dict[int, int] = {}
         self._bound_violation_recorded_depths: set[int] = set()
@@ -68,20 +68,16 @@ class SimulationEngine:
             enabled=bool(self.config["simulation"].get("live_output", False))
         )
 
-        latency_ticks = self.config["simulation"].get("latency_ticks", 1)
-        network_cfg = self.config.get("network", {})
-        message_loss_rate = self.config["simulation"].get(
-            "message_loss_rate",
-            network_cfg.get("message_loss_rate", 0.0),
-        )
+        network_cfg = self.config["network"]
+        latency_ticks = int(network_cfg["latency_ticks"])
+        message_loss_rate = float(network_cfg["message_loss_rate"])
+        self.network = Network(latency_ticks, message_loss_rate, self.rng)
         registry = CapabilityRegistry()
         broadcaster = RevocationBroadcaster(
-            self.message_bus,
+            self.network,
             latency_ticks,
             self.clock,
             self.metrics_collector,
-            message_loss_rate=message_loss_rate,
-            rng=self.rng,
         )
         trust_scorer = TrustScorer()
         delegation_cfg = self.config.get("delegation", {})
@@ -99,15 +95,31 @@ class SimulationEngine:
             delegation_policy=delegation_policy,
         )
         self.strategy = self._create_strategy(strategy_name)
+        heterogeneous_cfg = self.config.get("heterogeneous", {})
+        self.heterogeneous_enabled = bool(heterogeneous_cfg.get("enabled", False))
+        self.strategy_selector = StrategySelector(heterogeneous_cfg.get("policy", {}))
+        self.agent_roles = list(heterogeneous_cfg.get("agent_roles", []))
+        self.agent_strategy_names: Dict[UUID, str] = {}
+        if self.heterogeneous_enabled:
+            self.strategy_name = "heterogeneous"
 
         self.agents: Dict[UUID, AgentRuntime] = {}
-        transient_timeout_ticks = self.config["simulation"].get("transient_timeout_ticks", 5)
-        for _ in range(config["simulation"]["agents"]):
+        transient_timeout_ticks = int(self.config["transient"]["timeout_ticks"])
+        for idx in range(config["simulation"]["num_agents"]):
             agent_id = uuid4()
+            agent_strategy = self.strategy
+            if self.heterogeneous_enabled:
+                role = self.agent_roles[idx] if idx < len(self.agent_roles) else ""
+                selected_strategy = self.strategy_selector.select(role)
+                agent_strategy = self._create_strategy(selected_strategy)
+                self.agent_strategy_names[agent_id] = selected_strategy
+            else:
+                self.agent_strategy_names[agent_id] = strategy_name
+
             self.agents[agent_id] = AgentRuntime(
                 agent_id=agent_id,
                 authority=self.authority,
-                strategy=self.strategy,
+                strategy=agent_strategy,
                 clock=self.clock,
                 transient_timeout_ticks=transient_timeout_ticks,
                 monitor=self.consistency_monitor,
@@ -178,34 +190,44 @@ class SimulationEngine:
         self._run_agent_actions(tick)
         self._run_anomaly_detection(tick)
         self.consistency_monitor.check_staleness(self.agents, tick, self.authority.registry)
+        self.metrics_collector.record_convergence(tick)
 
     def _process_message_bus(self, tick: int) -> None:
         """Deliver due revocation messages for current tick."""
-        ready = [msg for msg in self.message_bus if msg["deliver_at"] <= tick]
-        for msg in ready:
-            self.message_bus.remove(msg)
-            self.agents[msg["recipient"]].on_revocation_received(msg["event"], tick)
+        for msg in self.network.deliver_due(tick):
+            self.agents[msg.destination].on_revocation_received(msg.payload, tick)
+            self.metrics_collector.record_revocation_latency(tick - msg.payload.issued_tick)
 
     def _run_agent_maintenance(self, tick: int) -> None:
         """Run per-agent timeout and strategy tick handlers."""
         for agent in self.agents.values():
-            agent.check_transient_timeouts(tick)
+            timed_out = agent.check_transient_timeouts(tick)
+            if timed_out:
+                for cap_id in timed_out:
+                    LOGGER.warning(
+                        "event=transient_timeout agent=%s capability=%s tick=%d",
+                        agent.agent_id,
+                        cap_id,
+                        tick,
+                    )
             agent.strategy.on_tick(agent, tick)
 
     def _trigger_scheduled_revocations(self, tick: int) -> None:
         """Apply scenario-configured revocation trigger if due."""
-        revocation_tick = self.config["scenario"].get("revocation_trigger_tick")
+        revocation_tick = self.config["scenario"].get("revocation_tick")
         if tick == revocation_tick:
             root_cap_id = self.config["scenario"].get("root_capability_id")
             if root_cap_id:
                 self._remaining_ops_at_revoke_by_depth = self._snapshot_remaining_ops_by_depth(
-                    root_cap_id, self.config["scenario"]["cascade_revocation"]
+                    root_cap_id, self.config["scenario"]["cascade_on_revoke"]
                 )
-                self.authority.revoke_capability(
+                event = self.authority.revoke_capability(
                     capability_id=root_cap_id,
                     reason=RevocationReason.EXPLICIT,
-                    cascade=self.config["scenario"]["cascade_revocation"],
+                    cascade=self.config["scenario"]["cascade_on_revoke"],
                 )
+                if self.strategy_name == "eager":
+                    self._complete_eager_revocation(event.id, tick)
                 LOGGER.info(
                     "event=scheduled_revoke tick=%d capability=%s",
                     tick,
@@ -214,12 +236,10 @@ class SimulationEngine:
 
     def _run_agent_actions(self, tick: int) -> None:
         """Run action attempts and stale credential accounting for all agents."""
-        actions_per_tick = self.config["simulation"].get("actions_per_tick")
         for idx, agent in enumerate(self.agents.values()):
             attempts = self._determine_action_attempts_for_agent(
                 tick=tick,
                 agent_index=idx,
-                actions_per_tick=actions_per_tick,
             )
             if attempts <= 0:
                 continue
@@ -246,6 +266,7 @@ class SimulationEngine:
                         self.metrics_collector.record_unauthorized_action(action_record)
                         depth = action_record.delegation_depth
                         self._depth_unauthorized_counts[depth] += 1
+                        self.consistency_monitor.record_unauthorized_action(depth)
                         self._check_bound_violation(depth)
 
     def _determine_action_attempts_for_agent(
@@ -253,13 +274,12 @@ class SimulationEngine:
         *,
         tick: int,
         agent_index: int,
-        actions_per_tick: int | None,
     ) -> int:
         """Return action attempts for one agent in the current tick."""
         scenario_conf = self.config.get("scenario", {})
-        anomaly_start = scenario_conf.get("anomaly_behavior_starts_tick")
+        anomaly_start = scenario_conf.get("anomaly_start_tick")
         anomaly_target = int(scenario_conf.get("anomaly_target_agent_index", 0))
-        anomaly_burst = int(scenario_conf.get("anomaly_burst_actions_per_tick", 0))
+        anomaly_burst = int(scenario_conf.get("anomaly_burst_rate", 0) or 0)
 
         if (
             anomaly_start is not None
@@ -269,15 +289,15 @@ class SimulationEngine:
         ):
             return anomaly_burst
 
-        if actions_per_tick is None:
-            if self.rng.random() >= self.config["simulation"]["action_probability"]:
-                return 0
-            return 1
-        return max(0, int(actions_per_tick))
+        action_probability = float(scenario_conf.get("action_probability", 0.0))
+        velocity = int(scenario_conf.get("agent_velocity", 1))
+        if self.rng.random() >= action_probability:
+            return 0
+        return max(0, velocity)
 
     def _run_anomaly_detection(self, tick: int) -> None:
         """Run trust scorer anomaly detection and trigger auto-revocation."""
-        anomaly_start = self.config.get("scenario", {}).get("anomaly_behavior_starts_tick")
+        anomaly_start = self.config.get("scenario", {}).get("anomaly_start_tick")
         if anomaly_start is not None and tick < anomaly_start:
             return
 
@@ -321,6 +341,8 @@ class SimulationEngine:
 
     def _check_bound_violation(self, depth: int) -> None:
         """Check and record per-depth unauthorized bound violations."""
+        if self.heterogeneous_enabled:
+            return
         if depth in self._bound_violation_recorded_depths:
             return
         bound = calculate_depth_bound(
@@ -332,6 +354,17 @@ class SimulationEngine:
         if self._depth_unauthorized_counts[depth] > bound:
             self._bound_violation_recorded_depths.add(depth)
             self.metrics_collector.record_bound_violation(depth)
+
+    def _complete_eager_revocation(self, event_id: UUID, tick: int) -> None:
+        """Synchronously deliver eager revocation messages before proceeding."""
+        pending = self.authority.get_revocation_status(event_id)["pending_acks"]
+        if pending <= 0:
+            return
+        due_tick = tick + self.network.latency_ticks
+        for msg in self.network.deliver_due(due_tick):
+            self.agents[msg.destination].on_revocation_received(msg.payload, due_tick)
+        latency = due_tick - tick
+        self.metrics_collector.record_revocation_latency(latency)
 
     def _setup_scenario(self):
         """Initialise capabilities and delegation topology for scenario."""
@@ -366,13 +399,21 @@ class SimulationEngine:
             child_agent.cache.update(child_cap)
             parent_agent = child_agent
             parent_cap = child_cap
+        self.consistency_monitor.set_delegation_tree(
+            self.authority.registry.get_delegation_tree_snapshot()
+        )
 
 
 def main():
     """CLI entry-point for single-strategy simulation run."""
     parser = argparse.ArgumentParser(description="Run an agent revocation simulation.")
     parser.add_argument("scenario", help="Path to the scenario YAML file.")
-    parser.add_argument("--strategy", help="Revocation strategy to use.", default="eager")
+    parser.add_argument(
+        "--strategy",
+        help="Revocation strategy to use.",
+        default="eager",
+        choices=["eager", "lazy", "lease", "exec_count"],
+    )
     parser.add_argument(
         "--log-level",
         default="INFO",
@@ -382,8 +423,7 @@ def main():
     args = parser.parse_args()
     configure_logging(getattr(logging, args.log_level))
 
-    with open(args.scenario, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config = load_scenario(args.scenario)
 
     engine = SimulationEngine(config, args.strategy, args.scenario)
     metrics = engine.run()

@@ -1,0 +1,32 @@
+network:
+  redis_pubsub_ms: 0.1
+  kafka_ms: 10
+  oso_replica_lag_ms_p99: 1000
+  opa_bundle_lag_worst_case_s: 420
+  ocsp_introspection_ms: 20
+  webhook_p99_alert_threshold_s: 30
+  eager_revalidation_ms: 25
+  lazy_cache_validation_ms: 1
+
+strategies:
+  lease:
+    spiffe_jwt_svid_ttl_s: 300
+    spiffe_x509_svid_ttl_s: 21600
+    standard_access_token_ttl_s: 3600
+    aws_sts_default_ttl_s: 3600
+    aws_sts_minimum_ttl_s: 900
+
+  exec_count:
+    lambda_max_tps: 10000
+    banking_bound: 10
+    crm_bound: 500
+    anomaly_trigger_bound: 1000
+
+narrative_baseline:
+  crl_update_max_hours: 168
+  crl_update_typical_hours: 24
+  ocsp_latency_2012_ms: 291
+  ocsp_latency_now_ms: 20
+
+performance_ratio:
+  eager_vs_lazy_cost: "25-50x"
