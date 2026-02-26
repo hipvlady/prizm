@@ -154,7 +154,7 @@ python scripts/run_strategy_comparison.py \
 
 ## Quality Signals
 
-- Tests: `92 passed` (latest local run on **February 26, 2026**).
+- Tests: `102 passed` (latest local run on **February 26, 2026**).
 - Coverage: `88%` total (`coverage run -m pytest && coverage report -m`).
 - Exceptions are domain-specific (`RevocationError`, `StaleCredentialError`, `CacheMissError`, etc.).
 - Structured logging with severity levels (`DEBUG`/`INFO`/`WARNING`/`ERROR`).

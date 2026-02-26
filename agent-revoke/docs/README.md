@@ -7,6 +7,7 @@ This folder is structured for hackathon judges and technical reviewers.
 - `judges-guide.md`: 5-minute walkthrough and scoring-oriented narrative.
 - `metrics-and-evidence.md`: reproducible commands and observed results.
 - `scenario-schema.md`: scenario YAML contract and validation behavior.
+- `development-standards.md`: merge checks and code-quality expectations.
 
 ## Technical Core
 

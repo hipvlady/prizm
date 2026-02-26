@@ -17,7 +17,7 @@ coverage report -m
 
 Latest local run:
 
-- tests: `89 passed` (**February 26, 2026**)
+- tests: `102 passed` (**February 26, 2026**)
 - total line coverage: `88%`
 
 ### Strategy comparison
