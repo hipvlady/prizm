@@ -56,6 +56,32 @@ Validation:
 - strategy values must be one of `eager`, `lazy`, `lease`, `exec_count`
 - `heterogeneous.agent_roles`: list of strings
 
+## Adaptive Strategy Block
+
+Optional block:
+
+```yaml
+adaptive_strategy:
+  enabled: true
+  evaluate_interval_ticks: 1
+  low_trust_threshold: 0.5
+  recover_trust_threshold: 0.8
+  high_risk_strategy: eager
+```
+
+Behavior:
+
+- If trust score falls below `low_trust_threshold`, agent strategy switches to `high_risk_strategy`.
+- If trust score rises above `recover_trust_threshold`, agent strategy returns to baseline assignment.
+
+Validation:
+
+- `adaptive_strategy.enabled`: boolean
+- `adaptive_strategy.evaluate_interval_ticks`: integer `>= 1`
+- `adaptive_strategy.low_trust_threshold`: float in `[0.0, 1.0]`
+- `adaptive_strategy.recover_trust_threshold`: float in `[0.0, 1.0]` and `>= low_trust_threshold`
+- `adaptive_strategy.high_risk_strategy`: one of `eager`, `lazy`, `lease`, `exec_count`
+
 ## Error Behavior
 
 Invalid configs raise `ScenarioValidationError` and fail fast before any simulation tick runs.

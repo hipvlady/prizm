@@ -44,6 +44,8 @@ This project demonstrates one core security question in Agentic IAM:
   - `unauthorised_actions(depth=d) <= f(strategy, d)`
 - Heterogeneous mode:
   - role-based per-agent strategy assignment (`eager`/`lazy`/`lease`/`exec_count`)
+- Adaptive mode (optional):
+  - trust-driven per-agent auto-switch to stricter strategy (`adaptive_strategy` block)
 - Multi-run aggregated comparison:
   - `--runs` + `--seed-start`
   - report values rendered as `mean ± std`

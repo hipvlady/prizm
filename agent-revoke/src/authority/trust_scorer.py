@@ -20,7 +20,8 @@ class TrustScorer:
     def evaluate(self, agent_id: UUID, action_history: List[ActionRecord]) -> float:
         """Evaluate trust score from recent action outcomes."""
         score = 1.0
-        for action in action_history:
+        # Use a bounded recent window to support adaptive strategy recovery.
+        for action in action_history[-50:]:
             if action.result.value.startswith("denied"):
                 score -= 0.1
             elif action.result == ActionResult.EXHAUSTED:

@@ -40,6 +40,8 @@ LOGGER = get_logger(__name__)
 class SimulationEngine:
     """Drive scenario execution and collect consistency metrics."""
 
+    _SUPPORTED_STRATEGY_NAMES = {"eager", "lazy", "lease", "exec_count"}
+
     def __init__(self, config: Dict[str, Any], strategy_name: str, scenario_name: str):
         """Initialise simulation components.
 
@@ -99,7 +101,26 @@ class SimulationEngine:
         self.heterogeneous_enabled = bool(heterogeneous_cfg.get("enabled", False))
         self.strategy_selector = StrategySelector(heterogeneous_cfg.get("policy", {}))
         self.agent_roles = list(heterogeneous_cfg.get("agent_roles", []))
+        adaptive_cfg = self.config.get("adaptive_strategy", {})
+        self.adaptive_enabled = bool(adaptive_cfg.get("enabled", False))
+        self.adaptive_evaluate_interval_ticks = int(
+            adaptive_cfg.get("evaluate_interval_ticks", 1)
+        )
+        self.adaptive_low_trust_threshold = float(
+            adaptive_cfg.get("low_trust_threshold", 0.5)
+        )
+        self.adaptive_recover_trust_threshold = float(
+            adaptive_cfg.get("recover_trust_threshold", 0.8)
+        )
+        self.adaptive_high_risk_strategy = str(
+            adaptive_cfg.get("high_risk_strategy", "eager")
+        )
+        if self.adaptive_high_risk_strategy not in self._SUPPORTED_STRATEGY_NAMES:
+            raise ValueError(
+                f"adaptive high risk strategy must be one of {sorted(self._SUPPORTED_STRATEGY_NAMES)}"
+            )
         self.agent_strategy_names: Dict[UUID, str] = {}
+        self._base_agent_strategy_names: Dict[UUID, str] = {}
         if self.heterogeneous_enabled:
             self.strategy_name = "heterogeneous"
 
@@ -113,8 +134,10 @@ class SimulationEngine:
                 selected_strategy = self.strategy_selector.select(role)
                 agent_strategy = self._create_strategy(selected_strategy)
                 self.agent_strategy_names[agent_id] = selected_strategy
+                self._base_agent_strategy_names[agent_id] = selected_strategy
             else:
                 self.agent_strategy_names[agent_id] = strategy_name
+                self._base_agent_strategy_names[agent_id] = strategy_name
 
             self.agents[agent_id] = AgentRuntime(
                 agent_id=agent_id,
@@ -188,6 +211,7 @@ class SimulationEngine:
         self._run_agent_maintenance(tick)
         self._trigger_scheduled_revocations(tick)
         self._run_agent_actions(tick)
+        self._run_adaptive_strategy(tick)
         self._run_anomaly_detection(tick)
         self.consistency_monitor.check_staleness(self.agents, tick, self.authority.registry)
         self.metrics_collector.record_convergence(tick)
@@ -325,16 +349,72 @@ class SimulationEngine:
                         self._anomaly_revoked_agents.add(agent.agent_id)
                         break
 
+    def _run_adaptive_strategy(self, tick: int) -> None:
+        """Switch per-agent strategy based on trust score thresholds."""
+        if not self.adaptive_enabled:
+            return
+        if tick % self.adaptive_evaluate_interval_ticks != 0:
+            return
+
+        for agent in self.agents.values():
+            score = self.authority.trust_scorer.evaluate(
+                agent.agent_id,
+                agent.state.action_history,
+            )
+            if score <= self.adaptive_low_trust_threshold:
+                self._switch_agent_strategy(
+                    agent.agent_id,
+                    self.adaptive_high_risk_strategy,
+                    reason="low_trust",
+                    score=score,
+                )
+                continue
+
+            if score >= self.adaptive_recover_trust_threshold:
+                base = self._base_agent_strategy_names.get(agent.agent_id, "lazy")
+                self._switch_agent_strategy(
+                    agent.agent_id,
+                    base,
+                    reason="trust_recovered",
+                    score=score,
+                )
+
+    def _switch_agent_strategy(
+        self,
+        agent_id: UUID,
+        target_strategy_name: str,
+        *,
+        reason: str,
+        score: float,
+    ) -> None:
+        """Replace an agent strategy instance when adaptive policy requires it."""
+        if target_strategy_name not in self._SUPPORTED_STRATEGY_NAMES:
+            return
+        current = self.agent_strategy_names.get(agent_id)
+        if current == target_strategy_name:
+            return
+        agent = self.agents[agent_id]
+        agent.strategy = self._create_strategy(target_strategy_name)
+        self.agent_strategy_names[agent_id] = target_strategy_name
+        LOGGER.info(
+            "event=strategy_switch agent=%s from=%s to=%s reason=%s score=%.3f",
+            agent_id,
+            current,
+            target_strategy_name,
+            reason,
+            score,
+        )
+
     def _revocation_completion_semantics(self) -> str:
         """Return completion semantics tag for current strategy mode."""
-        if self.heterogeneous_enabled:
-            accepts_push = [agent.strategy.accepts_push_revocation for agent in self.agents.values()]
-            if all(accepts_push):
-                return "push"
-            if any(accepts_push):
-                return "mixed"
-            return "pull_eventual"
-        return "push" if self.strategy.accepts_push_revocation else "pull_eventual"
+        if not self.agents:
+            return "push" if self.strategy.accepts_push_revocation else "pull_eventual"
+        accepts_push = [agent.strategy.accepts_push_revocation for agent in self.agents.values()]
+        if all(accepts_push):
+            return "push"
+        if any(accepts_push):
+            return "mixed"
+        return "pull_eventual"
 
     def _snapshot_remaining_ops_by_depth(self, root_capability_id: UUID, cascade: bool) -> Dict[int, int]:
         """Snapshot remaining operation budgets grouped by depth at revoke tick."""
@@ -354,7 +434,7 @@ class SimulationEngine:
 
     def _check_bound_violation(self, depth: int) -> None:
         """Check and record per-depth unauthorized bound violations."""
-        if self.heterogeneous_enabled:
+        if self.heterogeneous_enabled or self.adaptive_enabled:
             return
         if depth in self._bound_violation_recorded_depths:
             return

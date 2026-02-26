@@ -66,6 +66,8 @@ def _require_bool(value: Any, *, path: Path, field: str) -> bool:
 def _normalize_legacy_keys(data: Dict[str, Any]) -> Dict[str, Any]:
     simulation = data.setdefault("simulation", {})
     scenario = data.setdefault("scenario", {})
+    if "adaptive_strategy" not in data and "adaptive" in data:
+        data["adaptive_strategy"] = data["adaptive"]
 
     if "num_agents" not in simulation and "agents" in simulation:
         simulation["num_agents"] = simulation["agents"]
@@ -296,6 +298,42 @@ def _validate_heterogeneous(heterogeneous: Dict[str, Any], path: Path) -> None:
         raise ScenarioValidationError(str(path), "'heterogeneous.agent_roles' must be a list of strings")
 
 
+def _validate_adaptive_strategy(adaptive: Dict[str, Any], path: Path) -> None:
+    _require_bool(adaptive.get("enabled", False), path=path, field="adaptive_strategy.enabled")
+    _require_int(
+        adaptive.get("evaluate_interval_ticks", 1),
+        path=path,
+        field="adaptive_strategy.evaluate_interval_ticks",
+        min_value=1,
+    )
+    _require_float(
+        adaptive.get("low_trust_threshold", 0.5),
+        path=path,
+        field="adaptive_strategy.low_trust_threshold",
+        min_value=0.0,
+        max_value=1.0,
+    )
+    recover = adaptive.get("recover_trust_threshold", 0.8)
+    _require_float(
+        recover,
+        path=path,
+        field="adaptive_strategy.recover_trust_threshold",
+        min_value=0.0,
+        max_value=1.0,
+    )
+    if float(recover) < float(adaptive.get("low_trust_threshold", 0.5)):
+        raise ScenarioValidationError(
+            str(path),
+            "'adaptive_strategy.recover_trust_threshold' must be >= low_trust_threshold",
+        )
+    strategy = adaptive.get("high_risk_strategy", "eager")
+    if strategy not in _SUPPORTED_STRATEGIES:
+        raise ScenarioValidationError(
+            str(path),
+            "'adaptive_strategy.high_risk_strategy' must be one of: eager, lazy, lease, exec_count",
+        )
+
+
 def _populate_runtime_aliases(data: Dict[str, Any]) -> Dict[str, Any]:
     """Backfill legacy aliases while keeping spec-canonical keys present."""
     simulation = data["simulation"]
@@ -359,6 +397,19 @@ def validate_scenario(data: Dict[str, Any], scenario_path: str | Path) -> Dict[s
         _validate_heterogeneous(normalized["heterogeneous"], path)
     else:
         normalized["heterogeneous"] = {"enabled": False, "policy": {}, "agent_roles": []}
+
+    if "adaptive_strategy" in normalized:
+        if not isinstance(normalized["adaptive_strategy"], dict):
+            raise ScenarioValidationError(str(path), "'adaptive_strategy' must be a mapping")
+        _validate_adaptive_strategy(normalized["adaptive_strategy"], path)
+    else:
+        normalized["adaptive_strategy"] = {
+            "enabled": False,
+            "evaluate_interval_ticks": 1,
+            "low_trust_threshold": 0.5,
+            "recover_trust_threshold": 0.8,
+            "high_risk_strategy": "eager",
+        }
 
     normalized["strategies"].setdefault("eager", {})
     normalized["strategies"].setdefault("lazy", {})

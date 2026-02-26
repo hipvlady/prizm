@@ -52,6 +52,8 @@ def test_load_valid_scenario_adds_heterogeneous_defaults(tmp_path: Path) -> None
 
     assert "heterogeneous" in config
     assert config["heterogeneous"]["enabled"] is False
+    assert "adaptive_strategy" in config
+    assert config["adaptive_strategy"]["enabled"] is False
 
 
 def test_load_scenario_rejects_missing_action_rate(tmp_path: Path) -> None:
@@ -102,6 +104,39 @@ def test_load_scenario_rejects_invalid_heterogeneous_policy(tmp_path: Path) -> N
             "enabled": True,
             "policy": {"api": "invalid-strategy"},
             "agent_roles": ["api", "api"],
+        },
+    }
+    _write_yaml(scenario_path, payload)
+
+    with pytest.raises(ScenarioValidationError):
+        load_scenario(str(scenario_path))
+
+
+def test_load_scenario_rejects_invalid_adaptive_strategy(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "invalid-adaptive.yaml"
+    payload = {
+        "simulation": {
+            "duration_ticks": 10,
+            "agents": 2,
+            "actions_per_tick": 1,
+            "latency_ticks": 1,
+            "transient_timeout_ticks": 10,
+        },
+        "scenario": {
+            "name": "invalid-adaptive",
+            "delegation_depth": 1,
+            "cascade_revocation": False,
+            "revocation_trigger_tick": 1,
+        },
+        "strategies": {"lazy": {}, "lease": {}, "exec_count": {}},
+        "trust": {},
+        "delegation": {},
+        "adaptive_strategy": {
+            "enabled": True,
+            "evaluate_interval_ticks": 1,
+            "low_trust_threshold": 0.5,
+            "recover_trust_threshold": 0.8,
+            "high_risk_strategy": "not-a-strategy",
         },
     }
     _write_yaml(scenario_path, payload)

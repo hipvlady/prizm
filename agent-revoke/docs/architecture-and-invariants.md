@@ -74,6 +74,7 @@ This gives machine-readable evidence for two phases:
 - `eager`: push invalidation on receipt (`accepts_push_revocation=True`).
 - `lazy`, `lease`, `exec_count`: pull/check semantics; receipt is acknowledged, invalidation occurs on strategy checks.
 - heterogeneous mode: per-agent strategy selected by role via `StrategySelector`.
+- adaptive mode: per-agent strategy can auto-switch based on trust score thresholds.
 
 ## Transient-State Liveness Guard
 
