@@ -6,8 +6,11 @@ from __future__ import annotations
 
 import argparse
 import copy
+import dataclasses
+import json
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -68,6 +71,34 @@ def run_comparison(
     return metrics_by_strategy
 
 
+def build_dashboard_payload(
+    *,
+    scenario_path: Path,
+    strategies: tuple[str, ...],
+    runs: int,
+    seed_start: int,
+    metrics_by_strategy: dict,
+) -> dict:
+    """Build JSON payload consumed by the interactive dashboard."""
+    aggregated = aggregate_comparison_runs(metrics_by_strategy)
+    serialized_runs = {
+        strategy: [dataclasses.asdict(item) for item in items]
+        for strategy, items in metrics_by_strategy.items()
+    }
+    serialized_aggregated = [dataclasses.asdict(item) for item in aggregated]
+    return {
+        "version": "1.0",
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "scenario": str(scenario_path),
+        "strategies": list(strategies),
+        "runs_per_strategy": runs,
+        "seed_start": seed_start,
+        "seed_end": seed_start + runs - 1,
+        "aggregated": serialized_aggregated,
+        "runs": serialized_runs,
+    }
+
+
 def main() -> None:
     """Parse CLI arguments and generate comparison report."""
     parser = argparse.ArgumentParser(
@@ -106,6 +137,11 @@ def main() -> None:
         default=0,
         help="Start seed used for repeated strategy runs.",
     )
+    parser.add_argument(
+        "--json-output",
+        default=None,
+        help="Optional JSON output path for the React dashboard dataset.",
+    )
     args = parser.parse_args()
 
     configure_logging(getattr(logging, args.log_level))
@@ -132,11 +168,25 @@ def main() -> None:
         html = generate_strategy_comparison_report(metrics_list)
     save_report(html, output_path)
 
+    if args.json_output:
+        payload = build_dashboard_payload(
+            scenario_path=scenario_path,
+            strategies=strategies,
+            runs=max(1, args.runs),
+            seed_start=args.seed_start,
+            metrics_by_strategy=metrics_by_strategy,
+        )
+        json_path = Path(args.json_output)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
     print(f"Scenario: {scenario_path}")
     print(f"Strategies: {', '.join(strategies)}")
     print(f"Runs per strategy: {max(1, args.runs)}")
     print(f"Seed range: {args.seed_start}..{args.seed_start + max(1, args.runs) - 1}")
     print(f"Report: {output_path}")
+    if args.json_output:
+        print(f"Dashboard JSON: {args.json_output}")
     if args.runs > 1:
         for item in aggregate_comparison_runs(metrics_by_strategy):
             print(

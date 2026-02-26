@@ -7,7 +7,7 @@ import sys
 
 import yaml
 
-from scripts.run_strategy_comparison import run_comparison
+from scripts.run_strategy_comparison import build_dashboard_payload, run_comparison
 from src.output.report import generate_aggregated_comparison_report
 from src.simulation.aggregation import aggregate_comparison_runs
 
@@ -120,3 +120,69 @@ def test_comparison_script_accepts_runs_and_seed_start(tmp_path: Path) -> None:
     assert "seed=3..4" in report_html
     assert "comparison (aggregated)" in report_html
     assert "Runs per strategy: 2" in result.stdout
+
+
+def test_build_dashboard_payload_has_expected_shape(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "tiny.yaml"
+    _write_tiny_scenario(scenario_path)
+    metrics_by_strategy = run_comparison(
+        scenario_path,
+        ("eager", "lazy"),
+        runs=2,
+        seed_start=11,
+    )
+    payload = build_dashboard_payload(
+        scenario_path=scenario_path,
+        strategies=("eager", "lazy"),
+        runs=2,
+        seed_start=11,
+        metrics_by_strategy=metrics_by_strategy,
+    )
+
+    assert payload["version"] == "1.0"
+    assert payload["scenario"].endswith("tiny.yaml")
+    assert payload["runs_per_strategy"] == 2
+    assert payload["seed_start"] == 11
+    assert payload["seed_end"] == 12
+    assert len(payload["aggregated"]) == 2
+    assert set(payload["runs"].keys()) == {"eager", "lazy"}
+    assert len(payload["runs"]["eager"]) == 2
+
+
+def test_comparison_script_writes_dashboard_json(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "tiny.yaml"
+    report_path = tmp_path / "tiny-report.html"
+    json_path = tmp_path / "tiny-dashboard.json"
+    _write_tiny_scenario(scenario_path)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_strategy_comparison.py",
+            "--scenario",
+            str(scenario_path),
+            "--output",
+            str(report_path),
+            "--json-output",
+            str(json_path),
+            "--strategies",
+            "eager,lazy",
+            "--runs",
+            "2",
+            "--seed-start",
+            "3",
+        ],
+        cwd=str(Path(__file__).resolve().parent.parent),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert report_path.exists()
+    assert json_path.exists()
+    payload = yaml.safe_load(json_path.read_text(encoding="utf-8"))
+    assert payload["runs_per_strategy"] == 2
+    assert payload["seed_start"] == 3
+    assert "aggregated" in payload
+    assert "runs" in payload
+    assert "Dashboard JSON:" in result.stdout

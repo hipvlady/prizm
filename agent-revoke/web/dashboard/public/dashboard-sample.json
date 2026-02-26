@@ -1,0 +1,474 @@
+{
+  "aggregated": [
+    {
+      "convergence_mean": 1,
+      "convergence_std": 0.0,
+      "message_overhead_mean": 1.0,
+      "message_overhead_std": 0.0,
+      "p50_mean": 1,
+      "p50_std": 0.0,
+      "p99_mean": 1,
+      "p99_std": 0.0,
+      "revalidations_mean": 0.0,
+      "revalidations_std": 0.0,
+      "runs": 3,
+      "staleness_max_mean": 0.0,
+      "staleness_max_std": 0.0,
+      "strategy": "eager",
+      "transient_timeouts_mean": 0.0,
+      "transient_timeouts_std": 0.0,
+      "unauthorized_by_depth_mean": {},
+      "unauthorized_by_depth_std": {},
+      "unauthorized_mean": 0.0,
+      "unauthorized_std": 0.0
+    },
+    {
+      "convergence_mean": 1,
+      "convergence_std": 0.0,
+      "message_overhead_mean": 1.0,
+      "message_overhead_std": 0.0,
+      "p50_mean": 1,
+      "p50_std": 0.0,
+      "p99_mean": 1,
+      "p99_std": 0.0,
+      "revalidations_mean": 0.0,
+      "revalidations_std": 0.0,
+      "runs": 3,
+      "staleness_max_mean": 2.0,
+      "staleness_max_std": 0.0,
+      "strategy": "lazy",
+      "transient_timeouts_mean": 0.0,
+      "transient_timeouts_std": 0.0,
+      "unauthorized_by_depth_mean": {
+        "0": 2.0
+      },
+      "unauthorized_by_depth_std": {
+        "0": 0.0
+      },
+      "unauthorized_mean": 2.0,
+      "unauthorized_std": 0.0
+    },
+    {
+      "convergence_mean": 1,
+      "convergence_std": 0.0,
+      "message_overhead_mean": 1.0,
+      "message_overhead_std": 0.0,
+      "p50_mean": 1,
+      "p50_std": 0.0,
+      "p99_mean": 1,
+      "p99_std": 0.0,
+      "revalidations_mean": 0.0,
+      "revalidations_std": 0.0,
+      "runs": 3,
+      "staleness_max_mean": 4.0,
+      "staleness_max_std": 0.0,
+      "strategy": "lease",
+      "transient_timeouts_mean": 0.0,
+      "transient_timeouts_std": 0.0,
+      "unauthorized_by_depth_mean": {
+        "0": 5.0
+      },
+      "unauthorized_by_depth_std": {
+        "0": 0.0
+      },
+      "unauthorized_mean": 5.0,
+      "unauthorized_std": 0.0
+    },
+    {
+      "convergence_mean": 1,
+      "convergence_std": 0.0,
+      "message_overhead_mean": 1.0,
+      "message_overhead_std": 0.0,
+      "p50_mean": 1,
+      "p50_std": 0.0,
+      "p99_mean": 1,
+      "p99_std": 0.0,
+      "revalidations_mean": 1.0,
+      "revalidations_std": 0.0,
+      "runs": 3,
+      "staleness_max_mean": 2.0,
+      "staleness_max_std": 0.0,
+      "strategy": "exec_count",
+      "transient_timeouts_mean": 0.0,
+      "transient_timeouts_std": 0.0,
+      "unauthorized_by_depth_mean": {
+        "0": 2.0
+      },
+      "unauthorized_by_depth_std": {
+        "0": 0.0
+      },
+      "unauthorized_mean": 2.0,
+      "unauthorized_std": 0.0
+    }
+  ],
+  "generated_at": "2026-02-26T18:50:42.956044+00:00",
+  "runs": {
+    "eager": [
+      {
+        "avg_tick_seconds": 0.00018034182721748948,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          1
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.0007585466373711824,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 0,
+        "strategy": "eager",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {},
+        "unauthorized_actions_count": 0,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0011369900312274694
+      },
+      {
+        "avg_tick_seconds": 9.507747987906139e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          1
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.000439069390995428,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 0,
+        "strategy": "eager",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {},
+        "unauthorized_actions_count": 0,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005872249603271484
+      },
+      {
+        "avg_tick_seconds": 7.748549493650596e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          1
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00031867482466623186,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 0,
+        "strategy": "eager",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {},
+        "unauthorized_actions_count": 0,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0004787700017914176
+      }
+    ],
+    "exec_count": [
+      {
+        "avg_tick_seconds": 9.547069203108549e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          2
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00022690046462230383,
+        "revalidation_count": 1,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 2,
+        "strategy": "exec_count",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 2
+        },
+        "unauthorized_actions_count": 2,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005868260050192475
+      },
+      {
+        "avg_tick_seconds": 9.382648083070914e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          2
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00022753856028430165,
+        "revalidation_count": 1,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 2,
+        "strategy": "exec_count",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 2
+        },
+        "unauthorized_actions_count": 2,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005766330286860466
+      },
+      {
+        "avg_tick_seconds": 9.936387262617548e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          2
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00024859773693606255,
+        "revalidation_count": 1,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 2,
+        "strategy": "exec_count",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 2
+        },
+        "unauthorized_actions_count": 2,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0006103770574554801
+      }
+    ],
+    "lazy": [
+      {
+        "avg_tick_seconds": 9.941986839597423e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          2
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00025013654376380143,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 2,
+        "strategy": "lazy",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 2
+        },
+        "unauthorized_actions_count": 2,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0006099620368331671
+      },
+      {
+        "avg_tick_seconds": 9.017350384965539e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          2
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00019976141047663986,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 2,
+        "strategy": "lazy",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 2
+        },
+        "unauthorized_actions_count": 2,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005553519586101174
+      },
+      {
+        "avg_tick_seconds": 8.846668060868979e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 1.0,
+        "cascade_completion_ticks": [
+          2
+        ],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.0002174301480408758,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 2,
+        "strategy": "lazy",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 2
+        },
+        "unauthorized_actions_count": 2,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005436019273474813
+      }
+    ],
+    "lease": [
+      {
+        "avg_tick_seconds": 9.852315997704864e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 0.0,
+        "cascade_completion_ticks": [],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00026785170775838195,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 4,
+        "strategy": "lease",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 5
+        },
+        "unauthorized_actions_count": 5,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0006054820260033011
+      },
+      {
+        "avg_tick_seconds": 9.011597527811925e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 0.0,
+        "cascade_completion_ticks": [],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00019874594872817397,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 4,
+        "strategy": "lease",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 5
+        },
+        "unauthorized_actions_count": 5,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005544529994949698
+      },
+      {
+        "avg_tick_seconds": 9.121113301565249e-05,
+        "bound_violations_by_depth": {},
+        "cascade_completeness_ratio": 0.0,
+        "cascade_completion_ticks": [],
+        "convergence_time": 1,
+        "message_overhead": 1,
+        "operations_wasted_on_revalidation": 0,
+        "p95_tick_seconds": 0.00023192261578515173,
+        "revalidation_count": 0,
+        "revocation_latency_p50": 1,
+        "revocation_latency_p99": 1,
+        "scenario": "/tmp/dashboard-tiny.yaml",
+        "staleness_window_max": 4,
+        "strategy": "lease",
+        "total_actions": 6,
+        "total_ticks": 6,
+        "transient_state_duration_avg": 0.0,
+        "transient_state_duration_max": 0,
+        "transient_state_timeouts": 0,
+        "unauthorized_actions_by_depth": {
+          "0": 5
+        },
+        "unauthorized_actions_count": 5,
+        "unauthorized_actions_impact": 0,
+        "unauthorized_actions_in_transient": 0,
+        "wall_time_seconds": 0.0005607189377769828
+      }
+    ]
+  },
+  "runs_per_strategy": 3,
+  "scenario": "/tmp/dashboard-tiny.yaml",
+  "seed_end": 9,
+  "seed_start": 7,
+  "strategies": [
+    "eager",
+    "lazy",
+    "lease",
+    "exec_count"
+  ],
+  "version": "1.0"
+}

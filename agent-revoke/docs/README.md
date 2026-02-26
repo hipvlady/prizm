@@ -26,3 +26,7 @@ This folder is structured for hackathon judges and technical reviewers.
 ## Formal Verification Pack
 
 - `../formal/tla/README.md`: minimal TLA+ model, TLC config, and run command.
+
+## Interactive Dashboard
+
+- `../web/dashboard/README.md`: React dashboard for comparison JSON datasets.

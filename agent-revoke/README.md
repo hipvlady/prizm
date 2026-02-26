@@ -58,6 +58,7 @@ This project demonstrates one core security question in Agentic IAM:
   - `transient.timeout_ticks`
   - `scenario.revocation_tick` / `scenario.cascade_on_revoke`
 - HTML comparison report (Pico.css + Chart.js).
+- Interactive React dashboard (`web/dashboard`) consuming comparison JSON exports.
 - Automated tests and coverage.
 
 ## Quick Start
@@ -90,6 +91,24 @@ python scripts/run_strategy_comparison.py \
   --seed-start 0 \
   --log-level ERROR
 ```
+
+### 5. Generate dashboard JSON + run interactive dashboard
+
+```bash
+python scripts/run_strategy_comparison.py \
+  --scenario scenarios/crm-bulk-ops.yaml \
+  --output /tmp/crm-comparison.html \
+  --json-output /tmp/crm-dashboard.json \
+  --runs 10 \
+  --seed-start 0 \
+  --log-level ERROR
+
+cd web/dashboard
+npm install
+npm run dev
+```
+
+Then upload `/tmp/crm-dashboard.json` in the dashboard UI.
 
 ## Judge Demo Flow (5 minutes)
 
@@ -135,7 +154,7 @@ python scripts/run_strategy_comparison.py \
 
 ## Quality Signals
 
-- Tests: `89 passed` (latest local run on **February 26, 2026**).
+- Tests: `92 passed` (latest local run on **February 26, 2026**).
 - Coverage: `88%` total (`coverage run -m pytest && coverage report -m`).
 - Exceptions are domain-specific (`RevocationError`, `StaleCredentialError`, `CacheMissError`, etc.).
 - Structured logging with severity levels (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
@@ -167,3 +186,4 @@ Implemented now:
 - bounds checker,
 - minimal TLA+ chain model with TLC config (`formal/tla`).
 - pull-strategy cascade completion semantics (`lazy`/`lease`/`exec_count`) with two-phase certificate status.
+- interactive web dashboard (React) for strategy-comparison datasets.
