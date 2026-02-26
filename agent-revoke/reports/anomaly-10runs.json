@@ -1,0 +1,181 @@
+{
+  "methodology": {
+    "runs_per_config": 10,
+    "seed_range": "0-9",
+    "std_type": "population (pstdev)"
+  },
+  "results": [
+    {
+      "scenario": "scenarios/anomaly-autorevoke.yaml",
+      "strategy": "eager",
+      "unauthorized_ops": {
+        "mean": 108.0,
+        "std": 0.0
+      },
+      "staleness_max": {
+        "mean": 10.0,
+        "std": 0.0
+      },
+      "latency_p50": {
+        "mean": 10,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 10,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 10,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.06208435340085998,
+        "std": 0.007801329045924415
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 108.0,
+          "std": 0.0
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/anomaly-autorevoke.yaml",
+      "strategy": "lazy",
+      "unauthorized_ops": {
+        "mean": 10.8,
+        "std": 3.6
+      },
+      "staleness_max": {
+        "mean": 1.9,
+        "std": 0.3
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.060613137803738934,
+        "std": 0.004054185844450592
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 10.8,
+          "std": 3.6
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/anomaly-autorevoke.yaml",
+      "strategy": "lease",
+      "unauthorized_ops": {
+        "mean": 2950.8,
+        "std": 3.6
+      },
+      "staleness_max": {
+        "mean": 245.9,
+        "std": 0.3
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.10086741580744274,
+        "std": 0.018109156113644553
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 2950.8,
+          "std": 3.6
+        }
+      },
+      "bound_violations": 0
+    },
+    {
+      "scenario": "scenarios/anomaly-autorevoke.yaml",
+      "strategy": "exec_count",
+      "unauthorized_ops": {
+        "mean": 16.0,
+        "std": 3.687817782917155
+      },
+      "staleness_max": {
+        "mean": 1.8,
+        "std": 0.4
+      },
+      "latency_p50": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "latency_p99": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "convergence": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "messages": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "revalidation": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "wall_time_s": {
+        "mean": 0.06621027200017124,
+        "std": 0.017434462190909623
+      },
+      "unauthorized_by_depth": {
+        "0": {
+          "mean": 16.0,
+          "std": 3.687817782917155
+        }
+      },
+      "bound_violations": 0
+    }
+  ]
+}
