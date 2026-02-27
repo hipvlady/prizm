@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 from src.core.mesi import MESIState
-from src.core.types import Capability
+from src.core.types import Capability, DelegationEdge
 
 
 class CapabilityRegistry:
@@ -87,3 +87,26 @@ class CapabilityRegistry:
         for parent, children in self._delegation_tree.items():
             snapshot[str(parent)] = [str(child) for child in sorted(children, key=str)]
         return snapshot
+
+    def get_delegation_edges(self) -> List[DelegationEdge]:
+        """Return explicit delegation edges with capability/agent metadata."""
+        edges: List[DelegationEdge] = []
+        for parent_id, children in self._delegation_tree.items():
+            parent = self.get(parent_id)
+            if parent is None:
+                continue
+            for child_id in sorted(children, key=str):
+                child = self.get(child_id)
+                if child is None:
+                    continue
+                edges.append(
+                    DelegationEdge(
+                        parent_cap_id=parent_id,
+                        child_cap_id=child_id,
+                        parent_agent_id=parent.agent_id,
+                        child_agent_id=child.agent_id,
+                        depth=child.delegation_depth,
+                        attenuated_scope=child.scope,
+                    )
+                )
+        return edges

@@ -4,7 +4,8 @@ from collections import deque
 
 from src.core.clock import LogicalClock
 from src.core.mesi import MESIState
-from src.core.types import RevocationReason, ScopeAttenuationError, ActionRecord, ActionResult
+from src.core.exceptions import ScopeViolationError
+from src.core.types import RevocationReason, ActionRecord, ActionResult
 from src.authority.registry import CapabilityRegistry
 from src.authority.broadcaster import RevocationBroadcaster
 from src.authority.trust_scorer import TrustScorer
@@ -92,7 +93,7 @@ def test_delegation_scope_attenuation_error(authority_components):
     cap_a = authority.grant_capability(agent_id=user_a, resource="root", scope=["read"])
     
     clock.advance()
-    with pytest.raises(ScopeAttenuationError):
+    with pytest.raises(ScopeViolationError):
         authority.delegate_capability(
             from_agent_id=user_a,
             to_agent_id=user_b,

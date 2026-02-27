@@ -74,9 +74,17 @@ Implementation: `src/core/exceptions.py`
 - `RevocationError`
 - `StaleCredentialError`
 - `CacheMissError`
-- `DelegationDepthExceededError`
-- `RemainingOpsPropagationError`
+- `ScopeViolationError`
+- `BudgetExceededError`
+- `DepthExceededError`
+- `CapabilityNotFoundError`
+- `AgentNotFoundError`
 - `ScenarioValidationError`
+
+Backward-compatible names retained:
+
+- `DelegationDepthExceededError` (alias)
+- `RemainingOpsPropagationError` (alias)
 
 ## Test Contract Anchors
 

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Set
 from uuid import UUID, uuid4
 
 from ..strategies.base import ActionResult
+from .exceptions import ScopeViolationError
 from .mesi import MESIState, TransientState
 
 
@@ -25,13 +26,11 @@ class RevocationReason(Enum):
     REVALIDATING = "revalidating"
 
 
-class ScopeAttenuationError(Exception):
-    """Raised when delegated scope is broader than parent scope."""
+class ScopeAttenuationError(ScopeViolationError):
+    """Backward-compatible alias for scope-subset violations."""
 
     def __init__(self, child_scope: tuple[str, ...], parent_scope: tuple[str, ...]):
-        super().__init__(f"Child scope {child_scope} must be a subset of parent scope {parent_scope}")
-        self.child_scope = child_scope
-        self.parent_scope = parent_scope
+        super().__init__(parent_scope=parent_scope, child_scope=child_scope)
 
 
 class CapabilityExhaustedError(Exception):
@@ -131,3 +130,15 @@ class AgentState:
     action_history: List[ActionRecord] = field(default_factory=list)
     last_sync_tick: int = 0
     heartbeat_tick: int = 0
+
+
+@dataclass(frozen=True)
+class DelegationEdge:
+    """Explicit delegation DAG edge for cascade traversal/debugging."""
+
+    parent_cap_id: UUID
+    child_cap_id: UUID
+    parent_agent_id: UUID
+    child_agent_id: UUID
+    depth: int
+    attenuated_scope: tuple[str, ...]

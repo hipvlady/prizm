@@ -34,13 +34,22 @@ Reference sources reviewed:
   - Minimal chain model implemented in `formal/tla/`; broader compositional coverage outstanding
 - [x] B-014 Heterogeneous strategy
   - Implemented selector, schema support, engine integration, and tests
+- [x] Align exception class names with consolidated spec contract
+  - Added spec-aligned names in `src/core/exceptions.py` and maintained backward aliases
+- [x] Add `DelegationEdge` dataclass
+  - Added explicit edge type in `src/core/types.py`
+  - Added `CapabilityRegistry.get_delegation_edges()`
+- [x] Complete `ConsistencyMonitor` public API surface
+  - Added/expanded `get_global_state`, `get_metrics`, `get_revocation_trace`,
+    `get_delegation_tree`, `get_delegation_edges`, `get_delegation_graph`
+- [x] Reconcile scenario YAML defaults to consolidated specification values
+  - Updated banking, CRM, anomaly scenario parameters to spec-authoritative values
 
 ## Outstanding Work (ordered)
 
 1. Produce full invariant proof artifact for Theorem 1 extensions (cascade completeness + transient liveness).
 2. Expand TLA+ model beyond minimal chain to wider topologies and additional invariants.
-3. Add explicit integration note for Shared Signals / OIDC-A mapping (currently conceptual only).
-4. Resolve strict `mypy` backlog while keeping existing strict settings intact.
+3. Resolve strict `mypy` backlog while keeping existing strict settings intact.
 
 ## Recently Completed in This Pass
 

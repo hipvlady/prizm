@@ -5,14 +5,17 @@ from src.core.clock import LogicalClock
 from src.core.types import (
     MESIState,
     RevocationReason,
-    ScopeAttenuationError,
     ActionRecord,
     ActionResult,
     RevocationEvent,
     Capability,
     DelegationPolicy,
 )
-from src.core.exceptions import DelegationDepthExceededError, RemainingOpsPropagationError
+from src.core.exceptions import (
+    DelegationDepthExceededError,
+    RemainingOpsPropagationError,
+    ScopeViolationError,
+)
 from src.authority.registry import CapabilityRegistry
 from src.authority.broadcaster import RevocationBroadcaster
 from src.authority.trust_scorer import TrustScorer
@@ -56,7 +59,7 @@ def test_delegate_with_invalid_scope_raises_error(authority: AuthorityService):
     delegate_id = uuid4()
     parent_cap = authority.grant_capability(owner_id, "resource:read", scope=["read"])
     
-    with pytest.raises(ScopeAttenuationError):
+    with pytest.raises(ScopeViolationError):
         authority.delegate_capability(owner_id, delegate_id, parent_cap.id, ["read", "write"])
 
 def test_revoke_sends_event(authority_components):
