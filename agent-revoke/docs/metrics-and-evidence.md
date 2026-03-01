@@ -33,7 +33,7 @@ python scripts/run_strategy_comparison.py \
 
 ## Canonical Scenario Metrics
 
-The most deterministic benchmark is `crm-bulk-ops.yaml` (`actions_per_tick=100`, fixed seed).
+The most deterministic benchmark is `crm-bulk-ops.yaml` (`agent_velocity=100`, seed 42, revoke at tick 0).
 
 Sample output captured on **19 February 2026**:
 
@@ -52,16 +52,18 @@ Interpretation:
 
 ## Banking Cascade Snapshot
 
-Scenario: `banking-cascade.yaml`.
+Scenario: `banking-cascade.yaml` (seed 42, 10 agents, depth 3, revoke at tick 100).
 
 Sample output captured on **19 February 2026**:
 
-- `eager`: unauthorised `17`, staleness max `10`
-- `lazy`: unauthorised `17`, staleness max `10`
-- `lease`: unauthorised `136`, staleness max `99`
-- `exec_count`: unauthorised `129`, staleness max `99`
+| Strategy | Unauthorized Ops | Cascade Ratio | Staleness Max |
+|---|---:|---:|---:|
+| eager | 17 | 1.00 | 10 |
+| lazy | 33 | 1.00 | 23 |
+| lease | 30 | 1.00 | 20 |
+| exec_count | 13 | 1.00 | 12 |
 
-Note: this scenario is stochastic (no fixed seed in YAML), so absolute values may vary between runs.
+Note: this scenario uses stochastic action scheduling (`action_probability=0.5`), so absolute values may vary across seeds.
 
 ## Bound-Checker Status
 

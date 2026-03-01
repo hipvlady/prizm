@@ -19,11 +19,16 @@ IAM systems were designed for humans. Security protocols like OAuth 2.0 and OIDC
 
 A revocation latency that is negligible for humans becomes catastrophic at machine speed. TTL-based credential systems treat both cases identically.
 
+This gap is recognized across the identity and security community:
+- The **Cloud Security Alliance** Agentic IAM framework calls for continuous verification and dynamic trust posture in agent-to-agent interactions
+- The **OpenID Foundation** Agentic AI whitepaper highlights revocation propagation across delegated/offline chains as an unresolved challenge and motivates operation-bounded credentials
+- **OpenFGA** and **Oso** illustrate latency-vs-freshness trade-offs in delegated authorization that become security-critical at agent velocity
+
 ## The Insight
 
 Authorization revocation in multi-agent delegation chains is **operationally equivalent** to cache coherence in shared-memory multiprocessors under bounded-staleness semantics.
 
-Every token and signed assertion is a **cached copy** of a permission that existed at some time *t_0*. When the authority revokes that permission, all cached copies become stale. This is a coherence problem — the same class of problem that hardware engineers solved with MESI protocols.
+Every token and signed assertion is a **cached copy** of a permission that existed at some time *t_0*. When the authority revokes that permission, all cached copies become stale. This is a coherence problem -- the same class of problem that hardware engineers solved with MESI protocols.
 
 **State mapping:**
 
@@ -40,7 +45,7 @@ Every token and signed assertion is a **cached copy** of a permission that exist
 
 2. **Velocity Vulnerability metric.** Agent velocity as a first-class security parameter: *V_v = v . TTL*. Arithmetically simple, but it exposes a dimension absent from human-centric IAM literature.
 
-3. **Operation-bounded credentials (RCC).** Grounded in release consistency theory, not rate limiting. RCC *invalidates the credential* at the synchronization boundary, forcing re-acquisition from the authority. The agent cannot resume without a fresh grant -- this is acquire semantics, not throttling.
+3. **Operation-bounded credentials (RCC).** Grounded in release consistency theory, not rate limiting. RCC *invalidates the credential* at the synchronization boundary, forcing re-acquisition from the authority. The agent cannot resume without a fresh grant -- this is acquire semantics, not throttling. This directly addresses the execution-count bounds concept from the OpenID Foundation's Agentic AI whitepaper.
 
 4. **Reproducible evaluation.** Four strategies across three scenarios, 10 runs per configuration (deterministic seeds 0-9), population standard deviation.
 
@@ -68,9 +73,25 @@ Every token and signed assertion is a **cached copy** of a permission that exist
 
 **184x reduction** (Lease vs RCC). Strategies do not form a simple linear ranking.
 
-## Scope and Honest Limitations
+## Relation to Existing Work
 
-This project addresses several technical pressure points head-on:
+### CSA Agentic IAM Framework
+
+CCS operationalizes several CSA pillars through measurable protocol guarantees:
+- **Continuous Verification** maps to consistency-directed strategies (lazy check intervals, lease TTL, RCC revalidation cycles)
+- **Least Privilege** maps to scope attenuation and delegation depth enforcement
+- **Behavior-based Authorization** maps to trust-score anomaly detection with automatic revocation
+- **JIT Access** maps to ephemeral credential lifetimes by time or operation budget
+
+### OpenFGA / Oso Delegated Authorization
+
+CCS validates the latency-vs-freshness trade-off documented in production authorization systems, and quantifies its security implications at agent velocity. The four revocation strategies formalize the spectrum between strict consistency (eager) and eventual consistency (lease/TTL) that production systems navigate informally.
+
+### OpenID Foundation Agentic AI
+
+The RCC (execution-count) strategy directly implements the execution-count bounds concept from the OpenID Agentic AI whitepaper. CCS provides a formal framework for analyzing revocation propagation across delegation chains -- the challenge the whitepaper identifies as unresolved. The Shared Signals Framework maps conceptually to the `RevocationBroadcaster` propagation model.
+
+## Scope and Honest Limitations
 
 ### Equivalence Scope
 
@@ -111,6 +132,8 @@ agent-revoke/           Core simulator
   tests/                pytest suite (88% coverage)
   scripts/              Strategy comparison runner
   docs/                 Architecture, threat model, MESI mapping
+  formal/tla/           TLA+ model with TLC configuration
+  web/dashboard/        React dashboard for interactive analysis
 ```
 
 ## Quick Start
@@ -128,8 +151,24 @@ python -m src.simulation.engine scenarios/banking-cascade.yaml --strategy eager
 # Generate comparison report
 python scripts/run_strategy_comparison.py \
   --scenario scenarios/crm-bulk-ops.yaml \
-  --output crm-comparison.html
+  --output crm-comparison.html \
+  --runs 10 --seed-start 0
+
+# Export dashboard dataset
+python scripts/run_strategy_comparison.py \
+  --scenario scenarios/crm-bulk-ops.yaml \
+  --output /tmp/crm-comparison.html \
+  --json-output /tmp/crm-dashboard.json \
+  --runs 10 --seed-start 0
 ```
+
+## Roadmap
+
+- Broader TLA+ model beyond minimal chain (multi-agent interference)
+- Shared Signals Framework / OIDC-A protocol mapping
+- Scale evaluation to 50-100 agents
+- Byzantine fault injection and adversarial scheduling
+- Replicated authority service (split-brain resilience)
 
 ## Paper
 

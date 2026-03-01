@@ -78,6 +78,8 @@ Implementation: `src/core/exceptions.py`
 - `RemainingOpsPropagationError`
 - `ScenarioValidationError`
 
+Additionally, `ScopeAttenuationError` is defined in `src/core/types.py` (scope attenuation check during delegation).
+
 ## Test Contract Anchors
 
 - Shared fixtures: `tests/conftest.py`

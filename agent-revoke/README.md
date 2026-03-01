@@ -1,65 +1,53 @@
 # agent-revoke
 
-Temporal consistency simulator for multi-agent authorisation revocation, inspired by MESI coherence and consistency-directed protocols.
+Temporal consistency simulator for multi-agent authorization revocation, inspired by MESI coherence and consistency-directed protocols.
 
-## For Judges
+## Overview
 
-This project demonstrates one core security question in Agentic IAM:
+`agent-revoke` compares four revocation strategies (`eager`, `lazy`, `lease`, `exec_count`) under repeatable scenarios. It measures:
 
-- A capability is revoked at the authority.
-- Agents may still act on stale local cache state.
-- We need bounded staleness and measurable impact.
+- unauthorized actions (total and per delegation depth)
+- staleness window duration
+- revocation latency (p50/p99)
+- cascade behavior by delegation depth
+- clock-dependence profile (time-bounded vs operation-bounded)
 
-`agent-revoke` compares four revocation strategies (`eager`, `lazy`, `lease`, `exec_count`) under repeatable scenarios and reports:
-
-- unauthorised actions,
-- staleness window,
-- revocation latency,
-- cascade behaviour by delegation depth,
-- clock-dependence profile.
+The simulator implements the Capability Coherence System (CCS) framework described in the accompanying paper.
 
 ## What Is Implemented
 
-- Python 3.11+ simulator with typed domain model (`dataclasses` + `Enum`).
+- Python 3.11+ simulator with typed domain model (`dataclasses` + `Enum`)
 - PDP/PEP split:
   - `AuthorityService` (policy decision point)
   - `AgentRuntime` (policy enforcement point)
 - Four pluggable strategies:
-  - `eager` (consistency-agnostic)
-  - `lazy` (consistency-directed)
-  - `lease` (time-bound, clock-dependent)
-  - `exec_count` (operation-bound, clock-independent)
+  - `eager` (consistency-agnostic, SWMR-like push invalidation)
+  - `lazy` (consistency-directed, periodic check interval)
+  - `lease` (time-bound, clock-dependent TTL self-invalidation)
+  - `exec_count` (operation-bound, clock-independent RCC semantics)
 - Delegation policy controls:
-  - `max_depth`
+  - `max_depth` enforcement
   - scope attenuation enforcement
   - remaining operation propagation
-- BFS cascade traversal and cascade certificate fields:
+- BFS cascade traversal with cascade certificate fields:
   - `completion_semantics`
-  - `delivery_completion_tick`
-  - `expected_capabilities`
-  - `invalidated_capabilities`
-  - `cascade_completion_tick`
-  - interpretation: delivery completion and local eventual invalidation completion are tracked separately
+  - `delivery_completion_tick` / `cascade_completion_tick`
+  - `expected_capabilities` / `invalidated_capabilities`
 - Per-depth bound checker:
-  - `unauthorised_actions(depth=d) <= f(strategy, d)`
+  - `unauthorized_actions(depth=d) <= f(strategy, d)`
 - Heterogeneous mode:
-  - role-based per-agent strategy assignment (`eager`/`lazy`/`lease`/`exec_count`)
-- Adaptive mode (optional):
-  - trust-driven per-agent auto-switch to stricter strategy (`adaptive_strategy` block)
+  - role-based per-agent strategy assignment
+- Adaptive mode:
+  - trust-driven per-agent auto-switch to stricter strategy
 - Multi-run aggregated comparison:
-  - `--runs` + `--seed-start`
-  - report values rendered as `mean ± std`
+  - `--runs` + `--seed-start`, values reported as `mean +/- std`
 - Scenario schema validation:
   - `load_scenario()` validates required fields and value ranges
   - invalid configs fail fast with `ScenarioValidationError`
-- Canonical scenario schema uses:
-  - `simulation.num_agents`
-  - `network.latency_ticks` / `network.message_loss_rate`
-  - `transient.timeout_ticks`
-  - `scenario.revocation_tick` / `scenario.cascade_on_revoke`
-- HTML comparison report (Pico.css + Chart.js).
-- Interactive React dashboard (`web/dashboard`) consuming comparison JSON exports.
-- Automated tests and coverage.
+- HTML comparison report (Pico.css + Chart.js)
+- Interactive React dashboard (`web/dashboard`) consuming comparison JSON exports
+- Minimal TLA+ formal model (`formal/tla/`) with safety, liveness, and bound invariants
+- Automated tests and coverage (102 tests, 88% coverage)
 
 ## Quick Start
 
@@ -110,9 +98,9 @@ npm run dev
 
 Then upload `/tmp/crm-dashboard.json` in the dashboard UI.
 
-## Judge Demo Flow (5 minutes)
+## Evaluation Walkthrough
 
-### 1. CRM high-velocity scenario (main evidence)
+### 1. CRM high-velocity scenario (core evidence)
 
 ```bash
 python scripts/run_strategy_comparison.py \
@@ -123,14 +111,16 @@ python scripts/run_strategy_comparison.py \
   --log-level ERROR
 ```
 
-Open `/tmp/crm-comparison.html`.
+Open `/tmp/crm-comparison.html`. This scenario is fully deterministic (`actions_per_tick=100`).
 
-Deterministic sample output captured on **19 February 2026**:
+Reference output:
 
-- `eager`: unauthorised `500`
-- `lazy`: unauthorised `2400`
-- `lease`: unauthorised `6000`
-- `exec_count`: unauthorised `50`
+| Strategy | Unauthorized | Staleness Max |
+|---|---:|---:|
+| eager | 500 | 5 |
+| lazy | 2,400 | 24 |
+| lease | 6,000 | 60 |
+| exec_count | 50 | 0 |
 
 ### 2. Banking cascade scenario (depth propagation)
 
@@ -141,7 +131,7 @@ python scripts/run_strategy_comparison.py \
   --log-level ERROR
 ```
 
-Open `/tmp/banking-comparison.html` and inspect depth table.
+Open `/tmp/banking-comparison.html` and inspect the per-depth analysis section.
 
 ### 3. Anomaly auto-revocation scenario
 
@@ -154,36 +144,44 @@ python scripts/run_strategy_comparison.py \
 
 ## Quality Signals
 
-- Tests: `102 passed` (latest local run on **February 26, 2026**).
-- Coverage: `88%` total (`coverage run -m pytest && coverage report -m`).
-- Exceptions are domain-specific (`RevocationError`, `StaleCredentialError`, `CacheMissError`, etc.).
-- Structured logging with severity levels (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
-- Latency instrumentation uses `time.perf_counter()`.
+- Tests: `102 passed`
+- Coverage: `88%` (`coverage run -m pytest && coverage report -m`)
+- Exceptions are domain-specific (`RevocationError`, `StaleCredentialError`, `CacheMissError`, etc.)
+- Structured logging with severity levels (`DEBUG`/`INFO`/`WARNING`/`ERROR`)
+- Latency instrumentation uses `time.perf_counter()`
 
-## Documentation Pack
+## Documentation
 
-Start here:
+- [`docs/README.md`](docs/README.md) -- documentation index
+- [`docs/architecture-and-invariants.md`](docs/architecture-and-invariants.md) -- system design and guarantees
+- [`docs/MESI-mapping.md`](docs/MESI-mapping.md) -- MESI-to-authorization state mapping
+- [`docs/industry-context.md`](docs/industry-context.md) -- CSA, OpenID, OpenFGA/Oso alignment
+- [`docs/agentic-iam-code-mapping.md`](docs/agentic-iam-code-mapping.md) -- standards concepts mapped to code paths
+- [`docs/threat-model.md`](docs/threat-model.md) -- attack windows and controls
+- [`docs/metrics-and-evidence.md`](docs/metrics-and-evidence.md) -- reproducible commands and observed results
+- [`docs/quick-start-guide.md`](docs/quick-start-guide.md) -- step-by-step evaluation walkthrough
+- [`docs/scenario-schema.md`](docs/scenario-schema.md) -- scenario YAML contract
+- [`docs/temporal-logic-invariants.md`](docs/temporal-logic-invariants.md) -- CTL/LTL formulas and implementation mapping
+- [`formal/tla/README.md`](formal/tla/README.md) -- TLA+ model and TLC instructions
+- [`web/dashboard/README.md`](web/dashboard/README.md) -- React dashboard
 
-- `docs/README.md`
-- `docs/judges-guide.md`
-- `docs/architecture-and-invariants.md`
-- `docs/metrics-and-evidence.md`
-- `docs/MESI-mapping.md`
-- `docs/threat-model.md`
-- `docs/industry-context.md`
-- `docs/primer-insights.md`
-- `docs/depth-cascade-roadmap.md`
-- `formal/tla/README.md`
-
-## Current Scope vs Next Scope
+## Roadmap
 
 Implemented now:
 
-- simulation prototype,
-- strategy comparison,
-- depth policies,
-- cascade metrics,
-- bounds checker,
-- minimal TLA+ chain model with TLC config (`formal/tla`).
-- pull-strategy cascade completion semantics (`lazy`/`lease`/`exec_count`) with two-phase certificate status.
-- interactive web dashboard (React) for strategy-comparison datasets.
+- simulation prototype with four strategies
+- strategy comparison with multi-run statistics
+- delegation depth policies with cascade metrics
+- bounds checker with per-depth violation tracking
+- minimal TLA+ chain model with TLC verification
+- pull-strategy cascade completion semantics with two-phase certificate status
+- interactive web dashboard for strategy-comparison datasets
+- heterogeneous and adaptive strategy modes
+
+Planned:
+
+- Broader TLA+ model covering multi-agent interference
+- Shared Signals Framework / OIDC-A protocol integration
+- Scale evaluation to 50-100 agents
+- Byzantine fault injection
+- Replicated authority service for partition resilience

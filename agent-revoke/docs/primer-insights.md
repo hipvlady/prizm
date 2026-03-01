@@ -24,7 +24,9 @@ This project uses cache-coherence terminology as a design tool for authorisation
 
 ## Practical Design Takeaway
 
-The useful distinction for judges:
+The critical distinction for authorization system designers:
 
-- time-bounded consistency (lease) is intuitive but can allow large burst damage,
-- operation-bounded consistency (`exec_count`) caps impact directly.
+- time-bounded consistency (lease) is intuitive but allows large burst damage at agent velocity,
+- operation-bounded consistency (`exec_count`) caps impact directly, independent of agent speed.
+
+This maps to the OpenID Foundation's execution-count bounds concept and the CSA continuous verification pillar.

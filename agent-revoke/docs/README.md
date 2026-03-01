@@ -1,38 +1,39 @@
 # Documentation Index
 
-This folder is structured for hackathon judges and technical reviewers.
+## Getting Started
 
-## Start Here
+- [`quick-start-guide.md`](quick-start-guide.md): Step-by-step evaluation walkthrough with reproducible commands.
+- [`metrics-and-evidence.md`](metrics-and-evidence.md): Reproducible commands and observed results.
+- [`scenario-schema.md`](scenario-schema.md): Scenario YAML contract and validation behavior.
+- [`implementation-contract.md`](implementation-contract.md): Module-level implementation contract.
+- [`development-standards.md`](development-standards.md): Code quality expectations and merge checks.
 
-- `judges-guide.md`: 5-minute walkthrough and scoring-oriented narrative.
-- `metrics-and-evidence.md`: reproducible commands and observed results.
-- `scenario-schema.md`: scenario YAML contract and validation behavior.
-- `development-standards.md`: merge checks and code-quality expectations.
-- `implementation-contract.md`: module-level implementation contract from the consolidated spec.
-- `agentic-iam-code-mapping.md`: CSA/OpenID concepts mapped to concrete code paths.
+## Standards Alignment
+
+- [`industry-context.md`](industry-context.md): CSA, OpenID Foundation, and OpenFGA/Oso alignment.
+- [`agentic-iam-code-mapping.md`](agentic-iam-code-mapping.md): Standards concepts mapped to concrete code paths.
 
 ## Technical Core
 
-- `architecture-and-invariants.md`: system design, invariants, and guarantee boundaries.
-- `MESI-mapping.md`: MESI/MOESI semantics mapped to capability authorisation.
-- `primer-insights.md`: coherence taxonomy and why strategies differ.
-- `temporal-logic-invariants.md`: CTL/LTL-style formulas and their implementation hooks.
-- `terminal-visualization-contract.md`: terminal rendering API contract.
-- `html-report-contract.md`: report/template variable contract.
+- [`architecture-and-invariants.md`](architecture-and-invariants.md): System design, invariants, and guarantee boundaries.
+- [`MESI-mapping.md`](MESI-mapping.md): MESI/MOESI semantics mapped to capability authorization.
+- [`primer-insights.md`](primer-insights.md): Coherence taxonomy and why strategies differ.
+- [`temporal-logic-invariants.md`](temporal-logic-invariants.md): CTL/LTL-style formulas and their implementation hooks.
+- [`terminal-visualization-contract.md`](terminal-visualization-contract.md): Terminal rendering API contract.
+- [`html-report-contract.md`](html-report-contract.md): Report/template variable contract.
 
-## Context and Risk
+## Security
 
-- `industry-context.md`: practical relevance and external framing.
-- `threat-model.md`: attack windows, controls, and residual risk.
+- [`threat-model.md`](threat-model.md): Attack windows, controls, and residual risk.
 
-## Next Implementation Wave
+## Formal Verification
 
-- `depth-cascade-roadmap.md`: delegation depth guarantees + minimal TLA+ scope.
+- [`../formal/tla/README.md`](../formal/tla/README.md): TLA+ model, TLC config, and run instructions.
 
-## Formal Verification Pack
+## Roadmap
 
-- `../formal/tla/README.md`: minimal TLA+ model, TLC config, and run command.
+- [`depth-cascade-roadmap.md`](depth-cascade-roadmap.md): Delegation depth guarantees and formal verification scope.
 
 ## Interactive Dashboard
 
-- `../web/dashboard/README.md`: React dashboard for comparison JSON datasets.
+- [`../web/dashboard/README.md`](../web/dashboard/README.md): React dashboard for comparison JSON datasets.

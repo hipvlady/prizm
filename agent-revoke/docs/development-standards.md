@@ -1,6 +1,6 @@
 # Development Standards
 
-This project tracks the code-quality baseline from `main` and validates changes on `feature/phase2` before merge.
+Code quality expectations and validation requirements.
 
 ## Authoritative Config
 
