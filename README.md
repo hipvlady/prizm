@@ -2,7 +2,7 @@
 
 **Structural Equivalence Between Memory Consistency Models and Multi-Agent Authorization Revocation**
 
-[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://python.org)
 
 ---
@@ -178,4 +178,4 @@ The accompanying paper is available as:
 
 ## License
 
-BSD-3-Clause. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).
