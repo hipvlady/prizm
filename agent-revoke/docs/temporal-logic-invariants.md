@@ -32,7 +32,7 @@ This document captures the invariant formulas used to reason about the simulatio
   - `ConsistencyMonitor` completion tick tracking
 - Scope attenuation and budget propagation:
   - `AuthorityService.delegate_capability(...)`
-  - `DelegationDepthExceededError`, `RemainingOpsPropagationError`
+  - `DepthExceededError`, `BudgetExceededError`, `ScopeViolationError`
 
 ## Formal Model Status
 

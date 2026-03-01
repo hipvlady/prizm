@@ -34,9 +34,9 @@ Enforced constraints:
 
 Domain-specific failures:
 
-- `DelegationDepthExceededError`
-- `RemainingOpsPropagationError`
-- `ScopeAttenuationError`
+- `DepthExceededError`
+- `BudgetExceededError`
+- `ScopeViolationError`
 
 ## Implemented Invariants
 

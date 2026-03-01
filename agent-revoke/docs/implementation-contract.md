@@ -74,11 +74,19 @@ Implementation: `src/core/exceptions.py`
 - `RevocationError`
 - `StaleCredentialError`
 - `CacheMissError`
-- `DelegationDepthExceededError`
-- `RemainingOpsPropagationError`
+- `ScopeViolationError`
+- `BudgetExceededError`
+- `DepthExceededError`
+- `CapabilityNotFoundError`
+- `AgentNotFoundError`
 - `ScenarioValidationError`
 
 Additionally, `ScopeAttenuationError` is defined in `src/core/types.py` (scope attenuation check during delegation).
+
+Backward-compatible names retained:
+
+- `DelegationDepthExceededError` (alias)
+- `RemainingOpsPropagationError` (alias)
 
 ## Test Contract Anchors
 

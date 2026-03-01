@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Dict, List, Set, Tuple, Any
 from uuid import UUID
 
 from src.core.mesi import MESIState
+from src.core.types import DelegationEdge
 
 if TYPE_CHECKING:
     from src.agent.runtime import AgentRuntime
@@ -45,6 +46,7 @@ class ConsistencyMonitor:
         self._staleness_window_max: int = 0
         self._event_traces: Dict[UUID, List[TimelineEntry]] = {}
         self._delegation_tree: Dict[str, List[str]] = {}
+        self._delegation_edges: List[DelegationEdge] = []
         self._unauthorized_actions_by_depth: Dict[int, int] = {}
         self._last_global_state: Dict[UUID, Dict[UUID, MESIState]] = {}
 
@@ -278,17 +280,32 @@ class ConsistencyMonitor:
         """Set latest delegation graph snapshot."""
         self._delegation_tree = tree
 
+    def set_delegation_edges(self, edges: List[DelegationEdge]) -> None:
+        """Set explicit delegation edges snapshot."""
+        self._delegation_edges = list(edges)
+
     def get_global_state(self) -> Dict[UUID, Dict[UUID, MESIState]]:
         """Return latest observed per-agent capability MESI state map."""
         return {agent_id: dict(caps) for agent_id, caps in self._last_global_state.items()}
 
-    def get_metrics(self, time_window: tuple[float, float]) -> Dict[str, Any]:
-        """Return monitor metrics for requested window (window currently informational)."""
+    def get_metrics(self, time_window: tuple[float, float] | None = None) -> Dict[str, Any]:
+        """Return monitor-level metrics snapshot.
+
+        Parameters
+        ----------
+        time_window : tuple[float, float] | None, optional
+            Optional time window hint retained for API compatibility.
+        """
         _ = time_window
         return {
             "staleness_window_max": self._staleness_window_max,
             "convergence_latencies": list(self._convergence_latencies),
             "cascade_completion_latencies": list(self._cascade_completion_latencies),
+            "pending_events": len(self._pending_events),
+            "completed_events": len(self._completed_events),
+            "unauthorized_actions_by_depth": self.get_unauthorized_actions_by_depth(),
+            "delegation_tree": self.get_delegation_tree(),
+            "delegation_edges": self.get_delegation_edges(),
         }
 
     def get_revocation_trace(self, event_id: UUID) -> list[TimelineEntry]:
@@ -298,6 +315,17 @@ class ConsistencyMonitor:
     def get_delegation_tree(self) -> Dict[str, List[str]]:
         """Return last delegation tree snapshot."""
         return {k: list(v) for k, v in self._delegation_tree.items()}
+
+    def get_delegation_edges(self) -> List[Dict[str, Any]]:
+        """Return explicit delegation edges for contract-level introspection."""
+        return [asdict(edge) for edge in self._delegation_edges]
+
+    def get_delegation_graph(self) -> Dict[str, Any]:
+        """Return normalized delegation graph view (tree + edge list)."""
+        return {
+            "tree": self.get_delegation_tree(),
+            "edges": self.get_delegation_edges(),
+        }
 
     def get_unauthorized_actions_by_depth(self) -> Dict[int, int]:
         """Return unauthorized action counts keyed by delegation depth."""

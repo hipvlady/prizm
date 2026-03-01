@@ -495,6 +495,9 @@ class SimulationEngine:
         self.consistency_monitor.set_delegation_tree(
             self.authority.registry.get_delegation_tree_snapshot()
         )
+        self.consistency_monitor.set_delegation_edges(
+            self.authority.registry.get_delegation_edges()
+        )
 
 
 def main():

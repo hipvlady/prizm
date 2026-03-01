@@ -9,13 +9,13 @@ simulation:
   num_agents: 5
 
 network:
-  latency_ticks: 10
-  message_loss_rate: 0.0
+  latency_ticks: 5
+  message_loss_rate: 0.001
 
 scenario:
   name: "Anomaly Auto-Revocation"
-  delegation_depth: 1
-  cascade_on_revoke: false
+  delegation_depth: 2
+  cascade_on_revoke: true
   revocation_tick: null # No manual revocation
   action_probability: 0.7
   agent_velocity: 1

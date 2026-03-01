@@ -11,9 +11,11 @@ from src.authority.registry import CapabilityRegistry
 from src.authority.trust_scorer import TrustScorer
 from src.core.clock import LogicalClock
 from src.core.exceptions import (
-    DelegationDepthExceededError,
-    RemainingOpsPropagationError,
+    BudgetExceededError,
+    CapabilityNotFoundError,
+    DepthExceededError,
     RevocationError,
+    ScopeViolationError,
 )
 from src.core.logging_utils import get_logger
 from src.core.types import (
@@ -22,7 +24,6 @@ from src.core.types import (
     MESIState,
     RevocationEvent,
     RevocationReason,
-    ScopeAttenuationError,
 )
 from src.simulation.consistency import ConsistencyMonitor
 
@@ -175,7 +176,7 @@ class AuthorityService:
 
         cap = self.registry.get(capability_id)
         if not cap:
-            raise RevocationError(capability_id, "not found")
+            raise CapabilityNotFoundError(capability_id)
 
         try:
             cap_data = cap.to_dict()
@@ -251,43 +252,44 @@ class AuthorityService:
         ------
         RevocationError
             If parent capability cannot be found.
-        DelegationDepthExceededError
+        DepthExceededError
             If delegation exceeds configured maximum depth.
-        RemainingOpsPropagationError
+        BudgetExceededError
             If parent has no remaining operation budget to propagate.
-        ScopeAttenuationError
+        ScopeViolationError
             If delegated scope exceeds parent scope.
         """
         parent_cap = self.registry.get(parent_cap_id)
         if not parent_cap:
-            raise RevocationError(parent_cap_id, "parent capability not found")
+            raise CapabilityNotFoundError(parent_cap_id)
 
         if self.delegation_policy.require_scope_subset and not set(attenuated_scope).issubset(
             set(parent_cap.scope)
         ):
-            raise ScopeAttenuationError(tuple(attenuated_scope), parent_cap.scope)
+            raise ScopeViolationError(parent_scope=parent_cap.scope, child_scope=tuple(attenuated_scope))
 
         remaining_ops = None
         remaining_ttl = None
         child_depth = parent_cap.delegation_depth + 1
         if child_depth > self.delegation_policy.max_depth:
-            raise DelegationDepthExceededError(
-                parent_capability_id=parent_cap.id,
-                parent_depth=parent_cap.delegation_depth,
+            raise DepthExceededError(
+                current_depth=child_depth,
                 max_depth=self.delegation_policy.max_depth,
             )
 
         if self.delegation_policy.propagate_remaining_ops and parent_cap.max_operations is not None:
             remaining_ops = parent_cap.max_operations - parent_cap.operations_used
             if remaining_ops < 0:
-                raise RemainingOpsPropagationError(
-                    parent_cap.id,
-                    "remaining operations became negative; parent state is inconsistent",
+                raise BudgetExceededError(
+                    parent_remaining=remaining_ops,
+                    requested=0,
+                    detail="remaining operations became negative; parent state is inconsistent",
                 )
             if remaining_ops == 0:
-                raise RemainingOpsPropagationError(
-                    parent_cap.id,
-                    "cannot delegate exhausted capability (remaining operations == 0)",
+                raise BudgetExceededError(
+                    parent_remaining=remaining_ops,
+                    requested=1,
+                    detail="cannot delegate exhausted capability (remaining operations == 0)",
                 )
 
         if parent_cap.expires_tick is not None:

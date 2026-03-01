@@ -6,6 +6,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Set, Tuple
 
+from .exceptions import InvalidTransitionError
+
 
 class MESIState(Enum):
     """Stable MESI states for capability coherence."""
@@ -40,15 +42,6 @@ VALID_TRANSITIONS: Set[Tuple[MESIState, MESIState]] = {
 }
 
 
-class InvalidTransitionError(ValueError):
-    """Raised when an invalid stable-state transition is attempted."""
-
-    def __init__(self, current_state: MESIState, next_state: MESIState):
-        super().__init__(f"Invalid MESI transition: {current_state.value} -> {next_state.value}")
-        self.current_state = current_state
-        self.next_state = next_state
-
-
 def is_valid_transition(current_state: MESIState, next_state: MESIState) -> bool:
     """Validate whether a stable-state transition is allowed.
 
@@ -76,7 +69,7 @@ def transition_state(current_state: MESIState, next_state: MESIState) -> MESISta
         If transition is not part of ``VALID_TRANSITIONS``.
     """
     if not is_valid_transition(current_state, next_state):
-        raise InvalidTransitionError(current_state, next_state)
+        raise InvalidTransitionError(current_state.value, next_state.value, "transition_state")
     return next_state
 
 
