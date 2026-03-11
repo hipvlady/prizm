@@ -1,6 +1,6 @@
-# The Bureaucracy of Speed
+# The Bureaucracy of Speed: Structural Equivalence Between Memory Consistency Models and Multi-Agent Authorization Revocation
 
-**Structural Equivalence Between Memory Consistency Models and Multi-Agent Authorization Revocation**
+[Official public paper link (arXiv)](https://arxiv.org/abs/2603.09875)
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://python.org)
@@ -173,7 +173,7 @@ python scripts/run_strategy_comparison.py \
 ## Paper
 
 The accompanying paper is available as:
-- **"The Bureaucracy of Speed: Structural Equivalence Between Memory Consistency Models and Multi-Agent Authorization Revocation"**
+- [**"The Bureaucracy of Speed: Structural Equivalence Between Memory Consistency Models and Multi-Agent Authorization Revocation"**](https://arxiv.org/abs/2603.09875)
 - Subjects: cs.MA, cs.CR, cs.DC
 
 ## License
