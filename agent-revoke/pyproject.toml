@@ -6,7 +6,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 name = "agent-revoke"
 version = "0.1.0"
 description = "Temporal consistency in multi-agent authorization via MESI cache coherence adaptation"
-license = "Apache-2.0"
+license = "AGPL-3.0-only"
 requires-python = ">=3.11"
 dependencies = [
     "rich>=13.0",

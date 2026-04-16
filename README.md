@@ -2,10 +2,14 @@
 
 [Official public paper link (arXiv)](https://arxiv.org/abs/2603.09875)
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://python.org)
 
 ---
+
+> This repository is the reference simulation for the CCS protocol described in arXiv:2603.09875. It is intended for academic reproducibility and protocol validation. A production-grade commercial implementation is developed separately and is not available in this repository.
+>
+> As of April 16, 2026, the repository head and future commits are distributed under `AGPL-3.0-only`. Previously published commits remain available under their original `Apache-2.0` terms. See [NOTICE](NOTICE).
 
 ## The Problem
 
@@ -178,4 +182,4 @@ The accompanying paper is available as:
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+`AGPL-3.0-only` for the repository head and future commits published from April 16, 2026 onward. Earlier published commits remain available under their original `Apache-2.0` terms. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

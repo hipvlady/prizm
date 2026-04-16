@@ -1,0 +1,7 @@
+Reference Simulation Notice
+
+This repository is the reference simulation for the CCS protocol described in arXiv:2603.09875. It is intended for academic reproducibility and protocol validation. A production-grade commercial implementation is developed separately and is not available in this repository.
+
+As of April 16, 2026, the repository head and future commits are distributed under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). Previously published commits remain available under their original Apache License 2.0 (`Apache-2.0`) terms.
+
+This notice is informational. The governing license terms for code in this repository are defined by the LICENSE file.
